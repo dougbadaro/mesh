@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mesh Finance
 
-## Getting Started
+Sistema de controle financeiro pessoal inteligente, desenvolvido com as tecnologias mais modernas do ecossistema React/Next.js. O projeto foca em performance, design moderno (Glassmorphism) e uma experiência de usuário fluida para gestão de receitas, despesas, cartões de crédito e assinaturas recorrentes.
 
-First, run the development server:
+## 🚀 Tecnologias
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Este projeto foi construído utilizando uma stack moderna e robusta:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **[Next.js 15](https://nextjs.org/)** (App Router & Server Actions)
+- **[TypeScript](https://www.typescriptlang.org/)**
+- **[Tailwind CSS](https://tailwindcss.com/)**
+- **[Shadcn/ui](https://ui.shadcn.com/)** (Componentes de UI)
+- **[Prisma ORM](https://www.prisma.io/)** (v7)
+- **[Neon](https://neon.tech/)** (PostgreSQL Serverless)
+- **[Auth.js](https://authjs.dev/)** (v5 - Autenticação com Google)
+- **Zod** (Validação de dados)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ✨ Funcionalidades
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Dashboard Interativo:** Visão geral de saldo, receitas e despesas.
+- **Gestão de Transações:** Adição de receitas e despesas com categorização.
+- **Lógica de Cartão de Crédito:**
+  - Controle inteligente de faturas (Fechamento dia 08 / Vencimento dia 10).
+  - Suporte a parcelamento (lançamento automático das parcelas futuras).
+  - Visualização limitada aos próximos 3 meses para foco financeiro.
+- **Assinaturas Recorrentes:** Gestão de pagamentos fixos (Netflix, Aluguel, etc.) com projeção futura.
+- **Multi-tenancy:** Dados isolados por usuário (cada conta Google vê apenas seus dados).
+- **Design Moderno:** Interface com tema escuro e efeitos de vidro (Glassmorphism).
 
-## Learn More
+## 🛠️ Pré-requisitos
 
-To learn more about Next.js, take a look at the following resources:
+Antes de começar, você precisará ter instalado em sua máquina:
+- [Node.js](https://nodejs.org/) (Versão 18 ou superior)
+- Gerenciador de pacotes (NPM ou Yarn)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📦 Como rodar o projeto
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Clone o repositório**
+   ```bash
+   git clone [https://github.com/SEU-USUARIO/mesh.git](https://github.com/SEU-USUARIO/mesh.git)
+   cd mesh
