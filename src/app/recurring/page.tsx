@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { ArrowLeft, Receipt, PlusCircle } from "lucide-react"
 import Link from "next/link"
-import { RecurringItem } from "@/app/components/recurring-item" 
+import { RecurringItem } from "@/components/recurring-item" 
 
 // Componentes Shadcn
 import { Button } from "@/components/ui/button"

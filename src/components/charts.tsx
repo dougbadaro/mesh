@@ -28,8 +28,10 @@ export interface ChartData {
   categoryName?: string;
 }
 
+// ADICIONADO: initialBalance
 interface FinancialChartsProps {
   data: ChartData[];
+  initialBalance: number; 
 }
 
 interface GroupedData {
@@ -53,7 +55,7 @@ interface CustomTooltipProps extends TooltipProps<number, string> {
   label?: string;
 }
 
-// Cores Profissionais (Mantendo as mesmas para consistência)
+// Cores Profissionais
 const COLORS = {
   income: '#10b981', // Emerald 500
   expense: '#f43f5e', // Rose 500
@@ -105,7 +107,8 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   return null;
 };
 
-export function FinancialCharts({ data }: FinancialChartsProps) {
+// RECEBENDO A PROP initialBalance
+export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) {
   
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -155,13 +158,14 @@ export function FinancialCharts({ data }: FinancialChartsProps) {
 
   const sortedChartData = Object.values(groupedMap).sort((a, b) => a.sortDate - b.sortDate);
 
-  // Cálculo de Saldo
+  // CÁLCULO DE SALDO ACUMULADO COM SALDO INICIAL
+  // AQUI É A CORREÇÃO: Começamos com initialBalance, não com 0.
   const chartData = sortedChartData.reduce<{ results: GroupedData[], currentBalance: number }>((acc, item) => {
     const dailyResult = item.income - item.expense;
     const newBalance = acc.currentBalance + dailyResult;
     acc.results.push({ ...item, balance: newBalance });
     return { results: acc.results, currentBalance: newBalance };
-  }, { results: [], currentBalance: 0 }).results;
+  }, { results: [], currentBalance: initialBalance }).results; // <--- USANDO O SALDO INICIAL AQUI
 
 
   // --- DADOS PIZZA ---
@@ -260,7 +264,7 @@ export function FinancialCharts({ data }: FinancialChartsProps) {
                   <PieChart>
                     <Pie
                       data={pieChartData}
-                      cx="50%"
+                      cx="50%" 
                       cy="50%"
                       innerRadius={60}
                       outerRadius={80}

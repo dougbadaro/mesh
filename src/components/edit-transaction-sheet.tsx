@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { updateTransaction, deleteTransaction } from "@/app/actions/transactions"
-import { Trash2, Save, CalendarIcon, Tag, CreditCard, AlignLeft, ArrowUpCircle, ArrowDownCircle } from "lucide-react"
-import { Category } from "@prisma/client"
+import { Trash2, CalendarIcon, Tag, CreditCard, AlignLeft, ArrowUpCircle, ArrowDownCircle } from "lucide-react"
+import type { Category } from "@prisma/client"
 
 // Componentes Shadcn
 import {
@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { cn } from "@/lib/utils" // Importante para condicionais de classe
+import { cn } from "@/lib/utils"
 
 interface TransactionProps {
   id: string
@@ -44,6 +44,7 @@ interface EditSheetProps {
 
 export function EditTransactionSheet({ children, transaction, categories }: EditSheetProps) {
   const [open, setOpen] = useState(false)
+  const [isMounted, setIsMounted] = useState(false) 
   
   // States
   const [amount, setAmount] = useState(transaction.amount)
@@ -54,7 +55,15 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
   const [date, setDate] = useState(new Date(transaction.date).toISOString().split('T')[0])
   const [categoryId, setCategoryId] = useState(transaction.categoryId || "general")
   const [paymentMethod, setPaymentMethod] = useState(transaction.paymentMethod)
-  const [type, setType] = useState(transaction.type) // "INCOME" | "EXPENSE"
+  const [type, setType] = useState(transaction.type) 
+
+  // --- CORREÇÃO AQUI ---
+  useEffect(() => {
+    // Usamos setTimeout para evitar o erro de atualização síncrona
+    const timer = setTimeout(() => setIsMounted(true), 0)
+    return () => clearTimeout(timer)
+  }, [])
+  // ---------------------
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, "")
@@ -83,28 +92,26 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
     setOpen(false)
   }
 
+  // Se não estiver montado no cliente, retorna apenas o gatilho original (sem o Modal)
+  if (!isMounted) {
+    return <>{children}</>
+  }
+
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <div className="cursor-pointer w-full">
-            {children}
-        </div>
+         {children}
       </SheetTrigger>
       
       <SheetContent className="w-full sm:max-w-md bg-zinc-950 border-l border-white/10 p-0 flex flex-col h-full">
-        
-        {/* HEADER LIMPO */}
         <SheetHeader className="p-6 pb-2 border-b border-white/5">
           <SheetTitle className="text-lg font-medium text-zinc-400">Detalhes da Transação</SheetTitle>
         </SheetHeader>
 
         <form action={handleSave} className="flex-1 overflow-y-auto">
           <div className="p-6 space-y-8">
-
-            {/* 1. SEÇÃO HERO (Valor e Tipo) */}
+            {/* SEÇÃO DE VALOR */}
             <div className="flex flex-col items-center gap-6">
-               
-               {/* Toggle de Tipo (Pílula) */}
                <div className="flex p-1 bg-zinc-900 rounded-full border border-white/5 w-full max-w-[240px]">
                   <button
                     type="button"
@@ -132,7 +139,6 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
                   </button>
                </div>
 
-               {/* Input de Valor Gigante */}
                <div className="relative w-full">
                   <Input 
                     type="text"
@@ -141,17 +147,15 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
                     onChange={handleAmountChange}
                     className={cn(
                       "h-20 text-5xl font-bold bg-transparent border-none text-center focus-visible:ring-0 p-0 tracking-tight placeholder:text-zinc-800",
-                      type === 'INCOME' ? "text-emerald-500" : "text-zinc-100" // Deixei branco para saída (mais limpo) ou rose-500 se preferir
+                      type === 'INCOME' ? "text-emerald-500" : "text-zinc-100" 
                     )}
                   />
                   <p className="text-center text-xs text-zinc-500 font-medium uppercase tracking-widest mt-1">Valor da transação</p>
                </div>
             </div>
 
-            {/* 2. FORMULÁRIO DE DADOS */}
+            {/* CAMPOS */}
             <div className="space-y-5 bg-zinc-900/30 p-5 rounded-2xl border border-white/5">
-                
-                {/* Descrição */}
                 <div className="space-y-2">
                    <Label className="text-xs text-zinc-500 ml-1">Descrição</Label>
                    <div className="relative">
@@ -159,16 +163,15 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
                          <AlignLeft size={16} />
                       </div>
                       <Input 
+                        name="description"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         className="pl-10 bg-zinc-950/50 border-white/10 h-11 focus-visible:ring-offset-0 focus-visible:ring-zinc-800"
-                        placeholder="Ex: Compras no mercado"
                       />
                    </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                    {/* Data */}
                     <div className="space-y-2">
                        <Label className="text-xs text-zinc-500 ml-1">Data</Label>
                        <div className="relative">
@@ -184,7 +187,6 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
                        </div>
                     </div>
 
-                    {/* Categoria */}
                     <div className="space-y-2">
                        <Label className="text-xs text-zinc-500 ml-1">Categoria</Label>
                        <div className="relative">
@@ -206,7 +208,6 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
                     </div>
                 </div>
 
-                {/* Pagamento */}
                 <div className="space-y-2">
                    <Label className="text-xs text-zinc-500 ml-1">Forma de Pagamento</Label>
                    <div className="relative">
@@ -227,26 +228,23 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
                    </div>
                 </div>
             </div>
-
           </div>
 
-          {/* FOOTER FIXO EM BAIXO */}
           <SheetFooter className="absolute bottom-0 left-0 w-full p-6 border-t border-white/5 bg-zinc-950/80 backdrop-blur-sm flex flex-col sm:flex-row gap-3">
-             <Button type="submit" className="flex-1 bg-white hover:bg-zinc-200 text-black font-bold h-12 rounded-xl">
+              <Button type="submit" className="flex-1 bg-white hover:bg-zinc-200 text-black font-bold h-12 rounded-xl">
                 Salvar Alterações
-             </Button>
+              </Button>
 
-             <Button 
+              <Button 
                 type="button" 
                 onClick={handleDelete}
                 variant="outline" 
                 className="w-full sm:w-auto border-red-900/30 text-red-500 hover:bg-red-950/30 hover:text-red-400 hover:border-red-900/50 h-12 rounded-xl px-4"
-             >
-                <Trash2 size={18} />
-             </Button>
+              >
+                 <Trash2 size={18} />
+              </Button>
           </SheetFooter>
         </form>
-
       </SheetContent>
     </Sheet>
   )
