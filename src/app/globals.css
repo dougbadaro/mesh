@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    
+    /* Verde Emerald (Light Mode) */
+    --primary: 158 64% 40%; 
+    --primary-foreground: 0 0% 98%;
+    
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 158 64% 40%; /* Verde no anel de foco */
+    --radius: 0.75rem; /* Arredondamento moderno (12px) */
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    
+    /* Nossos fundos Glassmorphism usam muito Zinc-900/950 */
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    
+    /* Verde Emerald (Dark Mode - Um pouco mais vibrante) */
+    --primary: 158 64% 52%; /* #10b981 */
+    --primary-foreground: 144.9 80.4% 10%; /* Texto escuro sobre o verde */
+    
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 158 64% 52%; /* Verde no anel de foco */
+  }
+}
+
+@layer base {
+  * {
+    /* Substituímos @apply border-border por CSS nativo para evitar o erro de build */
+    border-color: hsl(var(--border)); 
+    border-style: solid; /* Garante que a borda apareça se houver width */
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #27272a transparent; /* Thumb (zinc-800) e Track (transparente) */
+  }
+
+  /* Chrome, Edge, Safari */
+  *::-webkit-scrollbar {
+    width: 6px;  /* Largura vertical bem fina */
+    height: 6px; /* Altura horizontal bem fina */
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent; /* Fundo invisível */
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #27272a; /* Cor do "pino" (zinc-800) */
+    border-radius: 20px;       /* Totalmente arredondado */
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: #3f3f46; /* Cor ao passar o mouse (zinc-700) */
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}

@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Deixe sem URL aqui para o Prisma 7 usar o config
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  PIX
+  CASH
+  BANK_TRANSFER
+  OTHER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+
+  // Seus relacionamentos atuais continuam aqui
+  transactions          Transaction[]
+  recurringTransactions RecurringTransaction[]
+
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  categories Category[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model Category {
+  id   String @id @default(cuid())
+  name String
+
+  type TransactionType @default(EXPENSE)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactions          Transaction[]
+  recurringTransactions RecurringTransaction[] // Se tiver essa relação
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RecurringTransaction {
+  id            String          @id @default(uuid())
+  description   String
+  amount        Decimal         @db.Decimal(10, 2)
+  type          TransactionType
+  paymentMethod PaymentMethod
+  categoryId    String?
+  category      Category?       @relation(fields: [categoryId], references: [id])
+
+  // Lógica de Recorrência/Parcelamento
+  isFixed       Boolean @default(false) // Se for true, não tem fim (ex: Aluguel)
+  isInstallment Boolean @default(false) // Se for true, tem número de parcelas
+  installments  Int? // Quantidade total de parcelas (ex: 12)
+
+  frequency String   @default("MONTHLY")
+  startDate DateTime @default(now())
+  active    Boolean  @default(true)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("recurring_transactions")
+}
+
+model Transaction {
+  id            String          @id @default(uuid())
+  amount        Decimal         @db.Decimal(10, 2)
+  description   String
+  type          TransactionType
+  category      Category?       @relation(fields: [categoryId], references: [id])
+  categoryId    String?
+  paymentMethod PaymentMethod
+  date          DateTime
+  dueDate       DateTime        @default(now())
+
+  // Referência à parcela
+  currentInstallment Int? // Ex: 1 (de 12)
+
+  recurringId String?
+  recurring   RecurringTransaction? @relation(fields: [recurringId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("transactions")
+}
