@@ -26,9 +26,6 @@ export default async function LoginPage() {
            <h1 className="text-6xl font-extrabold tracking-tighter text-white drop-shadow-2xl">
              Mesh<span className="text-emerald-500">.</span>
            </h1>
-           <p className="text-lg font-medium text-zinc-400 tracking-widest uppercase mt-2">
-             Finance
-           </p>
         </div>
 
         {/* CARD DE LOGIN */}
