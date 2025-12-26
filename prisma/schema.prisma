@@ -14,6 +14,8 @@ model User {
   updatedAt             DateTime               @updatedAt
   emailVerified         DateTime?
   image                 String?
+  creditCardClosingDay  Int                    @default(1) // Dia que a fatura fecha (Melhor dia de compra)
+  creditCardDueDay      Int                    @default(10) // Dia que a fatura vence
   accounts              Account[]
   categories            Category[]
   sessions              Session[]

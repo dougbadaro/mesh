@@ -6,10 +6,6 @@ import { z } from "zod"
 import { TransactionType, PaymentMethod, Prisma } from "@prisma/client"
 import { auth } from "@/auth"
 
-// --- CONFIGURAÇÕES DO CARTÃO ---
-const CARD_CLOSING_DAY = 6 // Dia que fecha a fatura
-const CARD_DUE_DAY = 10    // Dia que vence a fatura
-
 // --- SCHEMAS ---
 const transactionSchema = z.object({
   amount: z.coerce.number().positive(),
@@ -41,6 +37,17 @@ export async function createTransaction(formData: FormData) {
   }
 
   const userId = session.user.id
+  
+  // 1. BUSCA CONFIGURAÇÕES DO CARTÃO DO USUÁRIO
+  // Se não encontrar (fallback), usa 6 e 10 como padrão
+  const userSettings = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { creditCardClosingDay: true, creditCardDueDay: true }
+  })
+
+  const closingDay = userSettings?.creditCardClosingDay || 6
+  const dueDay = userSettings?.creditCardDueDay || 10
+
   const rawData = Object.fromEntries(formData.entries())
   const result = transactionSchema.safeParse(rawData)
 
@@ -76,9 +83,9 @@ export async function createTransaction(formData: FormData) {
     })
 
     // 2. Define o deslocamento inicial (Pular mês?)
-    // Se for Cartão e passou do dia 8, a 1ª ocorrência visual já é no próximo mês
+    // Usa a configuração dinâmica closingDay
     let startMonthOffset = 0
-    if (data.paymentMethod === 'CREDIT_CARD' && purchaseDate.getDate() >= CARD_CLOSING_DAY) {
+    if (data.paymentMethod === 'CREDIT_CARD' && purchaseDate.getDate() >= closingDay) {
         startMonthOffset = 1
     }
 
@@ -87,20 +94,16 @@ export async function createTransaction(formData: FormData) {
     for (let i = 0; i < repeatMonths; i++) {
       const monthIncrement = i + startMonthOffset
 
-      // Data Visual: Data da compra + meses de incremento
-      // Ex: Compra dia 20/Jan. Offset 1. i=0.
-      // Visual = 20/Jan + 1 mês = 20/Fev.
       const visualDate = new Date(purchaseDate)
       visualDate.setMonth(purchaseDate.getMonth() + monthIncrement)
       
       let dueDate = new Date(visualDate)
 
-      // Se for Cartão, vencimento é dia 10 do mesmo mês visual
       if (data.paymentMethod === 'CREDIT_CARD') {
-         dueDate.setDate(CARD_DUE_DAY)
-         // O mês do vencimento acompanha o mês visual (que já foi ajustado pelo offset)
+         // Usa a configuração dinâmica dueDay
+         dueDate.setDate(dueDay)
+         // O mês do vencimento acompanha o mês visual
       } else {
-         // Se não for cartão, vence no dia da ocorrência
          dueDate = visualDate
       }
 
@@ -111,7 +114,7 @@ export async function createTransaction(formData: FormData) {
         paymentMethod: data.paymentMethod,
         userId: userId,
         categoryId: data.categoryId ?? null,
-        date: visualDate, // Agora aparece no Dashboard do mês correto (Fatura)
+        date: visualDate,
         dueDate: dueDate,
         recurringId: recurring.id 
       })
@@ -124,7 +127,8 @@ export async function createTransaction(formData: FormData) {
   else if (data.paymentMethod === 'CREDIT_CARD') {
     
     let startMonthOffset = 0
-    if (purchaseDate.getDate() >= CARD_CLOSING_DAY) {
+    // Usa closingDay dinâmico
+    if (purchaseDate.getDate() >= closingDay) {
        startMonthOffset = 1
     }
 
@@ -138,7 +142,8 @@ export async function createTransaction(formData: FormData) {
       visualDate.setMonth(purchaseDate.getMonth() + monthIncrement)
 
       const dueDate = new Date(purchaseDate)
-      dueDate.setDate(CARD_DUE_DAY) 
+      // Usa dueDay dinâmico
+      dueDate.setDate(dueDay) 
       dueDate.setMonth(purchaseDate.getMonth() + monthIncrement)
 
       let description = data.description
@@ -192,6 +197,17 @@ export async function updateTransaction(formData: FormData) {
   const session = await auth()
   if (!session?.user?.id) throw new Error("Não autorizado")
 
+  const userId = session.user.id
+
+  // 1. BUSCA CONFIGURAÇÕES TAMBÉM NA EDIÇÃO
+  const userSettings = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { creditCardClosingDay: true, creditCardDueDay: true }
+  })
+
+  const closingDay = userSettings?.creditCardClosingDay || 6
+  const dueDay = userSettings?.creditCardDueDay || 10
+
   const rawData = {
     id: formData.get('id'),
     description: formData.get('description'),
@@ -211,16 +227,16 @@ export async function updateTransaction(formData: FormData) {
   const visualDate = new Date(purchaseDate)
   const dueDate = new Date(purchaseDate)
 
-  // Reaplica regra do cartão na edição
+  // Reaplica regra do cartão na edição com dados dinâmicos
   if (data.paymentMethod === 'CREDIT_CARD') {
      let startMonthOffset = 0
-     if (purchaseDate.getDate() >= CARD_CLOSING_DAY) {
+     if (purchaseDate.getDate() >= closingDay) {
         startMonthOffset = 1
      }
-     // Ajusta a data visual e o vencimento
+     
      visualDate.setMonth(purchaseDate.getMonth() + startMonthOffset)
      
-     dueDate.setDate(CARD_DUE_DAY)
+     dueDate.setDate(dueDay)
      dueDate.setMonth(purchaseDate.getMonth() + startMonthOffset)
   }
 
