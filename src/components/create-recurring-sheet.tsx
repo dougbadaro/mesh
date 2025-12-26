@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from "react"
-// Importamos a action correta que você já tem
 import { createTransaction } from "@/app/actions/transactions" 
 import { 
   Plus, 
@@ -13,7 +12,22 @@ import {
   ArrowDownCircle, 
   Loader2 
 } from "lucide-react"
-import type { Category } from "@prisma/client"
+
+// --- INTERFACES CORRIGIDAS ---
+interface CategoryDTO {
+  id: string
+  name: string
+  type: string
+  budgetLimit: number | null
+  userId: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface CreateRecurringSheetProps {
+  categories: CategoryDTO[]
+  children: React.ReactNode
+}
 
 import {
   Sheet,
@@ -35,11 +49,6 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
-interface CreateRecurringSheetProps {
-  categories: Category[]
-  children: React.ReactNode
-}
-
 export function CreateRecurringSheet({ categories, children }: CreateRecurringSheetProps) {
   const [open, setOpen] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
@@ -50,7 +59,7 @@ export function CreateRecurringSheet({ categories, children }: CreateRecurringSh
   const [amount, setAmount] = useState(0)
   const [amountDisplay, setAmountDisplay] = useState("R$ 0,00")
   const [description, setDescription] = useState("")
-  const [day, setDay] = useState("5") // Dia do vencimento
+  const [day, setDay] = useState("5") 
   const [categoryId, setCategoryId] = useState("general")
   const [paymentMethod, setPaymentMethod] = useState("CREDIT_CARD")
 
@@ -70,12 +79,8 @@ export function CreateRecurringSheet({ categories, children }: CreateRecurringSh
     if (amount <= 0) return
     setIsLoading(true)
 
-    // LÓGICA DE DATA:
-    // A action createTransaction espera uma data completa (YYYY-MM-DD).
-    // Vamos pegar o ano/mês atual e forçar o dia escolhido pelo usuário.
     const now = new Date()
     const year = now.getFullYear()
-    // PadStart garante que mês 5 vire "05"
     const month = String(now.getMonth() + 1).padStart(2, '0') 
     const selectedDay = String(day).padStart(2, '0')
     const fullDate = `${year}-${month}-${selectedDay}`
@@ -84,9 +89,9 @@ export function CreateRecurringSheet({ categories, children }: CreateRecurringSh
     formData.append("description", description || (type === 'INCOME' ? 'Receita Fixa' : 'Despesa Fixa'))
     formData.append("amount", amount.toString())
     formData.append("type", type)
-    formData.append("date", fullDate) // Envia a data montada
+    formData.append("date", fullDate) 
     formData.append("paymentMethod", paymentMethod)
-    formData.append("isRecurring", "true") // <--- ATIVA A LÓGICA DE RECORRÊNCIA NA ACTION
+    formData.append("isRecurring", "true") 
 
     if (categoryId !== "general") {
       formData.append("categoryId", categoryId)
@@ -121,7 +126,6 @@ export function CreateRecurringSheet({ categories, children }: CreateRecurringSh
         
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
             
-            {/* SELEÇÃO DE TIPO E VALOR */}
             <div className="flex flex-col items-center gap-6">
                <div className="flex p-1 bg-zinc-900 rounded-full border border-white/5 w-full max-w-[240px]">
                   <button
@@ -165,7 +169,6 @@ export function CreateRecurringSheet({ categories, children }: CreateRecurringSh
                </div>
             </div>
 
-            {/* CAMPOS DETALHADOS */}
             <div className="space-y-5 bg-zinc-900/30 p-5 rounded-2xl border border-white/5">
                 
                 <div className="space-y-2">

@@ -23,12 +23,12 @@ export async function updateCreditCardSettings(formData: FormData) {
   const result = creditCardSettingsSchema.safeParse(rawData)
 
   if (!result.success) {
-    throw new Error("Dados inválidos.")
+    throw new Error("Parâmetros de entrada inválidos.")
   }
 
   const { closingDay, dueDay, scope } = result.data
 
-  // 1. Atualiza a preferência do usuário (Isso afeta criações futuras em transactions.ts)
+  // 1. Atualiza as preferências do usuário no banco
   await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -37,9 +37,8 @@ export async function updateCreditCardSettings(formData: FormData) {
     }
   })
 
-  // 2. Lógica Retroativa: Atualiza transações existentes se solicitado
+  // 2. Se o usuário optou por "Atualizar existentes", faz o update em lote
   if (scope === 'all') {
-    // Busca todas as transações de cartão deste usuário
     const cardTransactions = await prisma.transaction.findMany({
         where: {
             userId: user.id,
@@ -48,12 +47,8 @@ export async function updateCreditCardSettings(formData: FormData) {
         select: { id: true, dueDate: true }
     })
 
-    // Prepara as atualizações em lote
     const updates = cardTransactions.map(t => {
         const currentDueDate = new Date(t.dueDate)
-        
-        // Mantém o Ano e Mês originais da transação, muda apenas o Dia
-        // Ex: Era 10/01/2024 -> Vira 16/01/2024
         const newDueDate = new Date(currentDueDate.getFullYear(), currentDueDate.getMonth(), dueDay)
 
         return prisma.transaction.update({
@@ -62,15 +57,12 @@ export async function updateCreditCardSettings(formData: FormData) {
         })
     })
 
-    // Executa todas as atualizações de uma vez
     if (updates.length > 0) {
         await prisma.$transaction(updates)
     }
   }
 
-  // Revalida as páginas afetadas
   revalidatePath('/settings')
   revalidatePath('/') 
   revalidatePath('/transactions')
-  revalidatePath('/budget')
 }

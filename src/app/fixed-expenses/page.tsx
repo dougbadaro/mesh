@@ -7,19 +7,37 @@ import { RecurringItem } from "@/components/recurring-item"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { CreateRecurringSheet } from "@/components/create-recurring-sheet"
+import { getAuthenticatedUser } from "@/lib/auth-check"
 
 export default async function RecurringPage() {
+  const user = await getAuthenticatedUser()
+
+  // 1. Busca de Recorrências com sanitização de Decimal
   const recurringsRaw = await prisma.recurringTransaction.findMany({
-    where: { active: true },
+    where: { userId: user.id, active: true },
     include: { category: true },
     orderBy: { startDate: 'asc' } 
   })
 
-  const categories = await prisma.category.findMany()
+  // 2. Busca de Categorias com sanitização de Decimal
+  const rawCategories = await prisma.category.findMany({
+    where: { OR: [{ userId: user.id }, { userId: null }] }
+  })
+
+  // --- SANITIZAÇÃO DE DADOS ---
+  const categories = rawCategories.map(cat => ({
+    ...cat,
+    budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null
+  }))
 
   const recurrings = recurringsRaw.map(rec => ({
     ...rec,
-    amount: rec.amount.toNumber()
+    amount: Number(rec.amount),
+    // Limpa o Decimal de dentro da categoria incluída no item
+    category: rec.category ? {
+      ...rec.category,
+      budgetLimit: rec.category.budgetLimit ? Number(rec.category.budgetLimit) : null
+    } : null
   }))
 
   const totalMonthly = recurrings.reduce((acc, curr) => acc + curr.amount, 0)
@@ -46,7 +64,7 @@ export default async function RecurringPage() {
             </div>
         </div>
 
-        {/* Novo Botão com o Formulário Estilo Dashboard */}
+        {/* Novo Botão com as categorias sanitizadas */}
         <CreateRecurringSheet categories={categories}>
             <Button className="bg-white text-black hover:bg-zinc-200 font-semibold gap-2 rounded-xl">
                 <Plus size={18} /> Novo Gasto Fixo

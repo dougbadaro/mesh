@@ -18,14 +18,18 @@ export async function getAuthenticatedUser() {
   // Isso previne que usuários deletados continuem acessando via cache
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true, name: true, email: true, image: true }
+    select: { 
+      id: true, 
+      name: true, 
+      email: true, 
+      image: true,
+      emailVerified: true // <--- ADICIONADO: Para verificar o selo de segurança
+    }
   })
 
   // 3. Se o usuário foi deletado do banco, mas ainda tem cookie:
   if (!user) {
-    // Redireciona para login (ou uma rota de logout forçado se preferir)
-    // O ideal aqui seria limpar o cookie, mas o redirect para login
-    // vai forçar uma nova tentativa que falhará, limpando o ciclo.
+    // Redireciona para logout forçado
     redirect("/api/auth/signout?callbackUrl=/login")
   }
 

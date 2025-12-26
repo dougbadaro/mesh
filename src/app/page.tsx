@@ -1,4 +1,4 @@
-import { getAuthenticatedUser } from "@/lib/auth-check"; // <--- Import da segurança
+import { getAuthenticatedUser } from "@/lib/auth-check";
 import { prisma } from "@/lib/prisma";
 import { TransactionType } from "@prisma/client";
 import { 
@@ -24,7 +24,7 @@ interface DashboardProps {
 }
 
 export default async function Dashboard(props: DashboardProps) {
-  // 1. SEGURANÇA: Verifica se o usuário existe no banco e força logout se não existir
+  // 1. SEGURANÇA
   const user = await getAuthenticatedUser();
   const userId = user.id;
 
@@ -39,39 +39,43 @@ export default async function Dashboard(props: DashboardProps) {
   
   const isPastMonth = endOfMonth < now;
 
-  // BUSCA HISTÓRICO COMPLETO (Para cálculo de saldo acumulado)
-  const cashTransactions = await prisma.transaction.findMany({
-    where: { 
-      userId: userId,
-      paymentMethod: { not: 'CREDIT_CARD' }, 
-    },
-    select: { id: true, amount: true, type: true, date: true, description: true }, 
-    orderBy: { date: 'asc' }
-  });
+  // 2. BUSCA DE DADOS
+  const [cashTransactions, monthlyTransactions, allFutureTransactions, rawCategories] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { 
+        userId: userId,
+        paymentMethod: { not: 'CREDIT_CARD' }, 
+      },
+      select: { id: true, amount: true, type: true, date: true }, 
+      orderBy: { date: 'asc' }
+    }),
+    prisma.transaction.findMany({
+      where: {
+        userId: userId,
+        date: { gte: startOfMonth, lte: endOfMonth }
+      },
+      orderBy: { date: 'desc' }, 
+      include: { category: true }
+    }),
+    prisma.transaction.findMany({
+      where: { 
+        userId: userId,
+        date: { gte: startOfMonth } 
+      }, 
+      include: { category: true }
+    }),
+    prisma.category.findMany({
+      where: { OR: [{ userId: userId }, { userId: null }] }
+    })
+  ]);
 
-  // BUSCA DO MÊS (Para lista e gráficos)
-  const monthlyTransactions = await prisma.transaction.findMany({
-    where: {
-      userId: userId,
-      date: { gte: startOfMonth, lte: endOfMonth }
-    },
-    orderBy: { date: 'desc' }, 
-    include: { category: true }
-  });
+  // 3. SANITIZAÇÃO DE DADOS (Removendo Decimals para evitar erro de serialização)
+  const categories = rawCategories.map(cat => ({
+    ...cat,
+    budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null
+  }));
 
-  const allFutureTransactions = await prisma.transaction.findMany({
-    where: { 
-      userId: userId,
-      date: { gte: startOfMonth } 
-    }, 
-    include: { category: true }
-  });
-
-  const categories = await prisma.category.findMany({
-    where: { OR: [{ userId: userId }, { userId: null }] }
-  });
-
-  // CÁLCULO DE SALDO
+  // 4. CÁLCULO DE SALDO
   let currentBalance = 0;   
   let startingBalance = 0;  
   
@@ -79,22 +83,28 @@ export default async function Dashboard(props: DashboardProps) {
   const startTime = startOfMonth.getTime();
 
   cashTransactions.forEach(t => {
-     const tDate = new Date(t.date).getTime();
-     const val = Number(t.amount);
+      const tDate = new Date(t.date).getTime();
+      const val = Number(t.amount);
 
-     if (tDate < startTime) {
-        if (t.type === TransactionType.INCOME) startingBalance += val;
-        else startingBalance -= val;
-     }
+      if (tDate < startTime) {
+         if (t.type === TransactionType.INCOME) startingBalance += val;
+         else startingBalance -= val;
+      }
 
-     if (tDate <= cutoffTime) {
-        if (t.type === TransactionType.INCOME) currentBalance += val;
-        else currentBalance -= val;
-     }
+      if (tDate <= cutoffTime) {
+         if (t.type === TransactionType.INCOME) currentBalance += val;
+         else currentBalance -= val;
+      }
   });
 
-  // PREPARAÇÃO DE DADOS
-  const listItemsNonCredit = monthlyTransactions.filter(t => t.paymentMethod !== 'CREDIT_CARD');
+  // 5. PREPARAÇÃO DE LISTAS E INDICADORES
+  const listItemsNonCredit = monthlyTransactions
+    .filter(t => t.paymentMethod !== 'CREDIT_CARD')
+    .map(t => ({
+      ...t,
+      amount: Number(t.amount)
+    }));
+
   const listItemsCredit = monthlyTransactions.filter(t => t.paymentMethod === 'CREDIT_CARD');
   const monthlyInvoiceTotal = listItemsCredit.reduce((acc, t) => acc + Number(t.amount), 0);
 
@@ -206,18 +216,16 @@ export default async function Dashboard(props: DashboardProps) {
 
           <div className="space-y-4">
               <div className="flex items-center justify-between px-1">
-                <div>
-                   <h3 className="font-semibold text-sm text-zinc-200 uppercase tracking-wider">
-                     Extrato de {startOfMonth.toLocaleString('pt-BR', { month: 'long' })}
-                   </h3>
-                </div>
+                <h3 className="font-semibold text-sm text-zinc-200 uppercase tracking-wider">
+                  Extrato de {startOfMonth.toLocaleString('pt-BR', { month: 'long' })}
+                </h3>
               </div>
               
               <Card className="bg-zinc-900/60 backdrop-blur border-white/5 overflow-hidden">
                 {monthlyTransactions.length === 0 ? (
                    <div className="p-10 text-center text-sm text-zinc-500">Nenhuma movimentação neste mês.</div>
                 ) : (
-                   <div className="divide-y divide-white/5 max-h-[500px] overflow-y-auto pr-2">
+                   <div className="divide-y divide-white/5 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                      
                      {monthlyInvoiceTotal > 0 && (
                         <div className="flex items-center justify-between p-4 bg-rose-500/5 border-l-2 border-rose-500/50">
@@ -271,13 +279,13 @@ export default async function Dashboard(props: DashboardProps) {
                               <div>
                                 <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition">{t.description}</p>
                                 <div className="flex items-center gap-2 text-[10px] text-zinc-500 mt-0.5">
-                                  <span>{formatDate(t.date)}</span>
-                                  {t.category && (
+                                 <span>{formatDate(t.date)}</span>
+                                 {t.category && (
                                     <>
                                       <span className="w-0.5 h-0.5 rounded-full bg-zinc-600" />
                                       <span>{t.category.name}</span>
                                     </>
-                                  )}
+                                 )}
                                 </div>
                               </div>
                             </div>
@@ -310,7 +318,7 @@ export default async function Dashboard(props: DashboardProps) {
            <Tabs defaultValue="manual" className="w-full">
               <TabsList className="grid w-full grid-cols-2 bg-zinc-900/50 mb-4">
                 <TabsTrigger value="manual">Manual</TabsTrigger>
-                <TabsTrigger value="import">Importar Extrato</TabsTrigger>
+                <TabsTrigger value="import">Importar</TabsTrigger>
               </TabsList>
               <TabsContent value="manual">
                 <TransactionForm categories={categories} />

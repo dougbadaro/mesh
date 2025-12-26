@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { updateTransaction, deleteTransaction } from "@/app/actions/transactions"
 import { Trash2, CalendarIcon, Tag, CreditCard, AlignLeft, ArrowUpCircle, ArrowDownCircle } from "lucide-react"
-import type { Category } from "@prisma/client"
 
 // Componentes Shadcn
 import {
@@ -26,6 +25,18 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
+// --- INTERFACES CORRIGIDAS ---
+// Definimos localmente para aceitar o budgetLimit como number vindo do Server Component
+interface CategoryDTO {
+  id: string
+  name: string
+  type: string
+  budgetLimit: number | null // Aqui resolve o erro do Decimal
+  userId: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
 interface TransactionProps {
   id: string
   description: string
@@ -39,7 +50,7 @@ interface TransactionProps {
 interface EditSheetProps {
   children: React.ReactNode
   transaction: TransactionProps
-  categories: Category[]
+  categories: CategoryDTO[] // Usa a interface corrigida
 }
 
 export function EditTransactionSheet({ children, transaction, categories }: EditSheetProps) {
@@ -57,13 +68,10 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
   const [paymentMethod, setPaymentMethod] = useState(transaction.paymentMethod)
   const [type, setType] = useState(transaction.type) 
 
-  // --- CORREÇÃO AQUI ---
   useEffect(() => {
-    // Usamos setTimeout para evitar o erro de atualização síncrona
     const timer = setTimeout(() => setIsMounted(true), 0)
     return () => clearTimeout(timer)
   }, [])
-  // ---------------------
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, "")
@@ -86,13 +94,13 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
   }
 
   const handleDelete = async () => {
+    if (!confirm("Deseja realmente excluir esta transação?")) return
     const formData = new FormData()
     formData.set('id', transaction.id)
     await deleteTransaction(formData)
     setOpen(false)
   }
 
-  // Se não estiver montado no cliente, retorna apenas o gatilho original (sem o Modal)
   if (!isMounted) {
     return <>{children}</>
   }
@@ -100,7 +108,7 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-         {children}
+          {children}
       </SheetTrigger>
       
       <SheetContent className="w-full sm:max-w-md bg-zinc-950 border-l border-white/10 p-0 flex flex-col h-full">
@@ -109,7 +117,7 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
         </SheetHeader>
 
         <form action={handleSave} className="flex-1 overflow-y-auto">
-          <div className="p-6 space-y-8">
+          <div className="p-6 space-y-8 pb-32">
             {/* SEÇÃO DE VALOR */}
             <div className="flex flex-col items-center gap-6">
                <div className="flex p-1 bg-zinc-900 rounded-full border border-white/5 w-full max-w-[240px]">
