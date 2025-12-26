@@ -7,7 +7,7 @@ import { TransactionType, PaymentMethod, Prisma } from "@prisma/client"
 import { auth } from "@/auth"
 
 // --- CONFIGURAÇÕES DO CARTÃO ---
-const CARD_CLOSING_DAY = 8 // Dia que fecha a fatura
+const CARD_CLOSING_DAY = 6 // Dia que fecha a fatura
 const CARD_DUE_DAY = 10    // Dia que vence a fatura
 
 // --- SCHEMAS ---
