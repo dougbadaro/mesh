@@ -1,5 +1,4 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
+import { getAuthenticatedUser } from "@/lib/auth-check"; // <--- Import da segurança
 import { prisma } from "@/lib/prisma";
 import { TransactionType } from "@prisma/client";
 import { 
@@ -25,9 +24,9 @@ interface DashboardProps {
 }
 
 export default async function Dashboard(props: DashboardProps) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  const userId = session.user.id;
+  // 1. SEGURANÇA: Verifica se o usuário existe no banco e força logout se não existir
+  const user = await getAuthenticatedUser();
+  const userId = user.id;
 
   const searchParams = await props.searchParams; 
   const now = new Date();
@@ -46,7 +45,6 @@ export default async function Dashboard(props: DashboardProps) {
       userId: userId,
       paymentMethod: { not: 'CREDIT_CARD' }, 
     },
-    // Adicionei description para garantir integridade dos dados se precisar debugar
     select: { id: true, amount: true, type: true, date: true, description: true }, 
     orderBy: { date: 'asc' }
   });
