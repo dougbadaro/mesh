@@ -12,12 +12,13 @@ import {
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChartData, FinancialCharts } from "@/components/charts";
+import { FinancialCharts, ChartData } from "@/components/charts";
 import { MonthSelector } from "@/components/month-selector";
 import { EditTransactionSheet } from "@/components/edit-transaction-sheet";
 import { TransactionForm } from "@/components/transaction-form";
 import { BankStatementImporter } from "@/components/bank-statement-importer";
 import { CreditCardWidget } from "@/components/credit-card-widget";
+import { BankAccountsWidget } from "@/components/bank-accounts-widget";
 
 interface DashboardProps {
   searchParams: Promise<{ month?: string; year?: string }>
@@ -39,65 +40,116 @@ export default async function Dashboard(props: DashboardProps) {
   
   const isPastMonth = endOfMonth < now;
 
-  // 2. BUSCA DE DADOS
+  // 2. BUSCA DE CARTEIRAS
+  const rawBankAccounts = await prisma.bankAccount.findMany({
+    where: { userId: userId },
+    select: { id: true, name: true, type: true, color: true, includeInTotal: true, initialBalance: true }
+  });
+
+  const bankAccounts = rawBankAccounts.map(acc => ({
+    ...acc,
+    initialBalance: Number(acc.initialBalance)
+  }));
+
+  const hiddenAccountIds = bankAccounts
+    .filter(acc => !acc.includeInTotal)
+    .map(acc => acc.id);
+
+  const initialBalanceSum = bankAccounts
+    .filter(acc => acc.includeInTotal)
+    .reduce((sum, acc) => sum + Number(acc.initialBalance), 0);
+
+  // 3. BUSCA DE DADOS
   const [cashTransactions, monthlyTransactions, allFutureTransactions, rawCategories] = await Promise.all([
+    // A. Transações Históricas
     prisma.transaction.findMany({
       where: { 
         userId: userId,
         paymentMethod: { not: 'CREDIT_CARD' }, 
       },
-      select: { id: true, amount: true, type: true, date: true }, 
+      select: { id: true, amount: true, type: true, date: true, bankAccountId: true },
       orderBy: { date: 'asc' }
     }),
+
+    // B. Transações do Mês (ATUALIZADO: Inclui bankAccount)
     prisma.transaction.findMany({
       where: {
         userId: userId,
-        date: { gte: startOfMonth, lte: endOfMonth }
+        date: { gte: startOfMonth, lte: endOfMonth },
+        bankAccountId: { notIn: hiddenAccountIds }
       },
       orderBy: { date: 'desc' }, 
-      include: { category: true }
+      include: { 
+          category: true,
+          bankAccount: { select: { name: true, color: true } } // <--- AGORA BUSCAMOS O NOME DO BANCO
+      }
     }),
+
+    // C. Transações Futuras
     prisma.transaction.findMany({
       where: { 
         userId: userId,
-        date: { gte: startOfMonth } 
+        date: { gte: startOfMonth },
+        bankAccountId: { notIn: hiddenAccountIds }
       }, 
       include: { category: true }
     }),
+
+    // D. Categorias
     prisma.category.findMany({
       where: { OR: [{ userId: userId }, { userId: null }] }
     })
   ]);
 
-  // 3. SANITIZAÇÃO DE DADOS (Removendo Decimals para evitar erro de serialização)
+  // 4. SANITIZAÇÃO DE DADOS
   const categories = rawCategories.map(cat => ({
     ...cat,
     budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null
   }));
 
-  // 4. CÁLCULO DE SALDO
-  let currentBalance = 0;   
-  let startingBalance = 0;  
+  // 5. CÁLCULO DE SALDOS
+  let currentBalance = initialBalanceSum;   
+  let startingBalance = initialBalanceSum;
   
   const cutoffTime = endOfMonth.getTime();
   const startTime = startOfMonth.getTime();
 
+  const accountsWithBalance = bankAccounts.map(acc => ({
+      ...acc,
+      currentBalance: Number(acc.initialBalance)
+  }));
+
   cashTransactions.forEach(t => {
       const tDate = new Date(t.date).getTime();
       const val = Number(t.amount);
+      const isIncome = t.type === TransactionType.INCOME;
 
-      if (tDate < startTime) {
-         if (t.type === TransactionType.INCOME) startingBalance += val;
-         else startingBalance -= val;
+      if (t.bankAccountId) {
+          const accIndex = accountsWithBalance.findIndex(a => a.id === t.bankAccountId);
+          if (accIndex >= 0) {
+              if (tDate <= cutoffTime) {
+                  if (isIncome) accountsWithBalance[accIndex].currentBalance += val;
+                  else accountsWithBalance[accIndex].currentBalance -= val;
+              }
+          }
       }
 
-      if (tDate <= cutoffTime) {
-         if (t.type === TransactionType.INCOME) currentBalance += val;
-         else currentBalance -= val;
+      const isVisible = !t.bankAccountId || !hiddenAccountIds.includes(t.bankAccountId);
+
+      if (isVisible) {
+          if (tDate < startTime) {
+             if (isIncome) startingBalance += val;
+             else startingBalance -= val;
+          }
+
+          if (tDate <= cutoffTime) {
+             if (isIncome) currentBalance += val;
+             else currentBalance -= val;
+          }
       }
   });
 
-  // 5. PREPARAÇÃO DE LISTAS E INDICADORES
+  // 6. PREPARAÇÃO DE LISTAS
   const listItemsNonCredit = monthlyTransactions
     .filter(t => t.paymentMethod !== 'CREDIT_CARD')
     .map(t => ({
@@ -150,6 +202,7 @@ export default async function Dashboard(props: DashboardProps) {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
+        {/* COLUNA ESQUERDA */}
         <div className="lg:col-span-8 space-y-6">
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -158,7 +211,7 @@ export default async function Dashboard(props: DashboardProps) {
                  <div className="flex justify-between items-start mb-4">
                     <div>
                         <p className="text-sm font-medium text-zinc-400">
-                          {isPastMonth ? "Saldo (Fim do mês)" : "Saldo em Conta"}
+                          {isPastMonth ? "Saldo (Fim do mês)" : "Saldo Disponível Total"}
                         </p>
                         <h2 className={`text-3xl font-bold tracking-tight mt-1 ${currentBalance < 0 ? 'text-rose-400' : 'text-white'}`}>
                             {formatCurrency(currentBalance)}
@@ -226,102 +279,124 @@ export default async function Dashboard(props: DashboardProps) {
                    <div className="p-10 text-center text-sm text-zinc-500">Nenhuma movimentação neste mês.</div>
                 ) : (
                    <div className="divide-y divide-white/5 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                     
-                     {monthlyInvoiceTotal > 0 && (
-                        <div className="flex items-center justify-between p-4 bg-rose-500/5 border-l-2 border-rose-500/50">
-                           <div className="flex items-center gap-4">
-                              <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-rose-500/10 text-rose-500">
-                                 <Receipt size={16} />
-                              </div>
-                              <div>
-                                 <p className="text-sm font-medium text-white">Fatura de Cartão de Crédito</p>
-                                 <p className="text-[10px] text-zinc-400">
-                                    {listItemsCredit.length} compras agrupadas
-                                 </p>
-                              </div>
-                           </div>
-                           <div className="text-right">
-                              <p className="text-sm font-bold tabular-nums text-rose-400">
-                                 - {formatCurrency(monthlyInvoiceTotal)}
-                              </p>
-                           </div>
-                        </div>
-                     )}
-
-                     {listItemsNonCredit.map((t) => (
-                       <EditTransactionSheet 
-                          key={t.id} 
-                          categories={categories}
-                          transaction={{
-                            id: t.id,
-                            description: t.description,
-                            amount: Number(t.amount), 
-                            date: t.date,
-                            type: t.type,
-                            paymentMethod: t.paymentMethod,
-                            categoryId: t.categoryId
-                          }}
-                       >
-                         <div 
-                           className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition group cursor-pointer outline-none focus-visible:bg-white/5 text-left"
-                           role="button"
-                           tabIndex={0}
-                         >
+                      
+                      {monthlyInvoiceTotal > 0 && (
+                         <div className="flex items-center justify-between p-4 bg-rose-500/5 border-l-2 border-rose-500/50">
                             <div className="flex items-center gap-4">
-                              <div className={`w-9 h-9 rounded-lg flex items-center justify-center border border-transparent transition-colors ${
-                                t.type === 'INCOME' 
-                                  ? 'bg-emerald-500/10 text-emerald-500 group-hover:border-emerald-500/20' 
-                                  : 'bg-zinc-800 text-zinc-400 border-white/5 group-hover:text-zinc-200'
-                              }`}>
-                                 {t.type === 'INCOME' ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
-                              </div>
-                              
-                              <div>
-                                <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition">{t.description}</p>
-                                <div className="flex items-center gap-2 text-[10px] text-zinc-500 mt-0.5">
-                                 <span>{formatDate(t.date)}</span>
-                                 {t.category && (
-                                    <>
-                                      <span className="w-0.5 h-0.5 rounded-full bg-zinc-600" />
-                                      <span>{t.category.name}</span>
-                                    </>
-                                 )}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-4">
-                                <div className="text-right">
-                                  <p className={`text-sm font-bold tabular-nums ${t.type === 'INCOME' ? 'text-emerald-500' : 'text-zinc-200'}`}>
-                                     {t.type === 'INCOME' ? '+' : '-'} {formatCurrency(Number(t.amount))}
+                               <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-rose-500/10 text-rose-500">
+                                  <Receipt size={16} />
+                               </div>
+                               <div>
+                                  <p className="text-sm font-medium text-white">Fatura de Cartão de Crédito</p>
+                                  <p className="text-[10px] text-zinc-400">
+                                     {listItemsCredit.length} compras agrupadas
                                   </p>
-                                  <div className="flex items-center justify-end gap-1.5 mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                                     <span className="text-[10px] text-zinc-500 capitalize">
-                                       {t.paymentMethod.toLowerCase().replace('_', ' ')}
-                                     </span>
-                                  </div>
-                                </div>
-                                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-800/50 text-zinc-600 group-hover:bg-zinc-800 group-hover:text-zinc-300 transition-all border border-transparent group-hover:border-white/10">
-                                   <Pencil size={14} />
-                                </div>
+                               </div>
+                            </div>
+                            <div className="text-right">
+                               <p className="text-sm font-bold tabular-nums text-rose-400">
+                                  - {formatCurrency(monthlyInvoiceTotal)}
+                               </p>
                             </div>
                          </div>
-                       </EditTransactionSheet>
-                     ))}
-                   </div>
-                )}
+                      )}
+
+                      {listItemsNonCredit.map((t) => (
+                        <EditTransactionSheet 
+                           key={t.id} 
+                           categories={categories}
+                           accounts={bankAccounts}
+                           transaction={{
+                             id: t.id,
+                             description: t.description,
+                             amount: Number(t.amount), 
+                             date: t.date,
+                             type: t.type,
+                             paymentMethod: t.paymentMethod,
+                             categoryId: t.categoryId,
+                             bankAccountId: t.bankAccountId
+                           }}
+                        >
+                          <div 
+                            className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition group cursor-pointer outline-none focus-visible:bg-white/5 text-left"
+                            role="button"
+                            tabIndex={0}
+                          >
+                             <div className="flex items-center gap-4">
+                               <div className={`w-9 h-9 rounded-lg flex items-center justify-center border border-transparent transition-colors ${
+                                 t.type === 'INCOME' 
+                                   ? 'bg-emerald-500/10 text-emerald-500 group-hover:border-emerald-500/20' 
+                                   : 'bg-zinc-800 text-zinc-400 border-white/5 group-hover:text-zinc-200'
+                               }`}>
+                                  {t.type === 'INCOME' ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
+                               </div>
+                               
+                               <div>
+                                 <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition">{t.description}</p>
+                                 <div className="flex items-center gap-2 text-[10px] text-zinc-500 mt-0.5">
+                                   <span>{formatDate(t.date)}</span>
+                                   
+                                   {/* MOSTRAR CATEGORIA */}
+                                   {t.category && (
+                                     <>
+                                       <span className="w-0.5 h-0.5 rounded-full bg-zinc-600" />
+                                       <span>{t.category.name}</span>
+                                     </>
+                                   )}
+
+                                   {/* MOSTRAR BANCO / CARTEIRA */}
+                                   {t.bankAccount && (
+                                     <>
+                                       <span className="w-0.5 h-0.5 rounded-full bg-zinc-600" />
+                                       <span className="flex items-center gap-1 text-zinc-400">
+                                          {/* Bolinha Colorida do Banco */}
+                                          <div 
+                                            className="w-1.5 h-1.5 rounded-full" 
+                                            style={{ backgroundColor: t.bankAccount.color || '#10b981' }} 
+                                          />
+                                          {t.bankAccount.name}
+                                       </span>
+                                     </>
+                                   )}
+                                 </div>
+                               </div>
+                             </div>
+
+                             <div className="flex items-center gap-4">
+                                 <div className="text-right">
+                                   <p className={`text-sm font-bold tabular-nums ${t.type === 'INCOME' ? 'text-emerald-500' : 'text-zinc-200'}`}>
+                                      {t.type === 'INCOME' ? '+' : '-'} {formatCurrency(Number(t.amount))}
+                                   </p>
+                                   <div className="flex items-center justify-end gap-1.5 mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                                      <span className="text-[10px] text-zinc-500 capitalize">
+                                        {t.paymentMethod.toLowerCase().replace('_', ' ')}
+                                      </span>
+                                   </div>
+                                 </div>
+                                 <div className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-800/50 text-zinc-600 group-hover:bg-zinc-800 group-hover:text-zinc-300 transition-all border border-transparent group-hover:border-white/10">
+                                    <Pencil size={14} />
+                                 </div>
+                             </div>
+                          </div>
+                        </EditTransactionSheet>
+                      ))}
+                    </div>
+                 )}
               </Card>
           </div>
         </div>
 
+        {/* COLUNA DIREITA */}
         <div className="lg:col-span-4 space-y-6">
+           <BankAccountsWidget accounts={accountsWithBalance} />
+
            <Tabs defaultValue="manual" className="w-full">
               <TabsList className="grid w-full grid-cols-2 bg-zinc-900/50 mb-4">
                 <TabsTrigger value="manual">Manual</TabsTrigger>
                 <TabsTrigger value="import">Importar</TabsTrigger>
               </TabsList>
               <TabsContent value="manual">
-                <TransactionForm categories={categories} />
+                <TransactionForm categories={categories} accounts={bankAccounts} />
               </TabsContent>
               <TabsContent value="import">
                 <BankStatementImporter categories={categories} />

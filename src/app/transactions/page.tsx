@@ -11,7 +11,8 @@ import {
   ArrowDownLeft, 
   SearchX,
   CreditCard,
-  Pencil
+  Pencil,
+  Wallet
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -24,6 +25,7 @@ interface TransactionsPageProps {
     page?: string
     type?: string
     future?: string 
+    bankId?: string // <--- Novo parametro
   }>
 }
 
@@ -34,6 +36,8 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
   // --- CONFIGURAÇÃO ---
   const query = searchParams?.query || ""
   const rawType = searchParams?.type
+  const bankId = searchParams?.bankId // Filtro de Carteira
+
   const typeFilter = Object.values(TransactionType).includes(rawType as TransactionType) 
     ? (rawType as TransactionType) 
     : undefined
@@ -58,36 +62,47 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
       mode: 'insensitive', 
     },
     ...(typeFilter && { type: typeFilter }),
-    ...(dateFilter && { date: dateFilter })
+    ...(dateFilter && { date: dateFilter }),
+    ...(bankId && { bankAccountId: bankId }) // <--- Aplica o filtro de carteira
   }
 
   // --- BUSCA PARALELA ---
-  const [totalItems, rawTransactions, rawCategories] = await Promise.all([
+  // Adicionamos a busca de contas (rawAccounts)
+  const [totalItems, rawTransactions, rawCategories, rawAccounts] = await Promise.all([
     prisma.transaction.count({ where: whereCondition }),
     prisma.transaction.findMany({
         where: whereCondition,
-        include: { category: true },
+        include: { 
+            category: true,
+            bankAccount: { select: { name: true, color: true } } // <--- Inclui dados visuais da conta
+        },
         orderBy: { date: 'desc' },
         skip: (currentPage - 1) * itemsPerPage,
         take: itemsPerPage,
     }),
     prisma.category.findMany({
         where: { OR: [{ userId: user.id }, { userId: null }] }
+    }),
+    // Busca contas para o filtro e para o modal
+    prisma.bankAccount.findMany({
+        where: { userId: user.id },
+        select: { id: true, name: true }
     })
   ])
 
   const totalPages = Math.ceil(totalItems / itemsPerPage)
 
-  // --- SANITIZAÇÃO DE DADOS (RESOLVE O ERRO DECIMAL DEFINITIVAMENTE) ---
+  // --- SANITIZAÇÃO DE DADOS ---
   const categories = rawCategories.map(cat => ({
     ...cat,
     budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null
   }))
 
+  const accounts = rawAccounts; // Contas não tem Decimal no select acima, pode passar direto
+
   const transactions = rawTransactions.map(t => ({
     ...t,
     amount: Number(t.amount),
-    // Limpa o Decimal de dentro da categoria incluída na transação
     category: t.category ? {
         ...t.category,
         budgetLimit: t.category.budgetLimit ? Number(t.category.budgetLimit) : null
@@ -120,7 +135,8 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
         </div>
       </div>
 
-      <TransactionFilters />
+      {/* FILTROS: Agora recebe as contas */}
+      <TransactionFilters accounts={accounts} />
 
       <div className="bg-zinc-900/40 backdrop-blur-sm border border-white/5 rounded-2xl overflow-hidden shadow-sm mt-6">
         
@@ -128,7 +144,7 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
         <div className="hidden md:grid grid-cols-12 gap-4 p-4 border-b border-white/5 bg-white/[0.02] text-xs font-medium text-zinc-500 uppercase tracking-wider">
             <div className="col-span-5">Descrição</div>
             <div className="col-span-2">Data</div>
-            <div className="col-span-2">Categoria</div>
+            <div className="col-span-2">Categoria / Conta</div>
             <div className="col-span-3 text-right">Valor</div>
         </div>
 
@@ -145,15 +161,18 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
                     key={t.id} 
                     transaction={{
                         ...t,
-                        categoryId: t.categoryId 
+                        categoryId: t.categoryId,
+                        bankAccountId: t.bankAccountId // Importante para o modal saber a conta
                     }} 
                     categories={categories}
+                    accounts={accounts} // Importante para o modal ter a lista
                  >
                     <div 
                         className="group relative md:grid md:grid-cols-12 md:gap-4 p-4 items-center hover:bg-white/[0.03] transition-colors cursor-pointer outline-none flex flex-col gap-3"
                         role="button"
                         tabIndex={0}
                     >
+                        {/* COLUNA DESCRIÇÃO */}
                         <div className="col-span-5 flex items-center gap-3 w-full text-left">
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center border border-transparent shrink-0 ${
                                 t.type === 'INCOME' 
@@ -173,20 +192,36 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
                             </div>
                         </div>
 
+                        {/* COLUNA DATA */}
                         <div className="col-span-2 hidden md:block text-sm text-zinc-400 text-left">
                             {formatDate(t.date)}
                         </div>
 
+                        {/* COLUNA CATEGORIA E CONTA */}
                         <div className="col-span-2 hidden md:block text-left">
-                            {t.category ? (
-                                <Badge variant="outline" className="border-white/10 text-zinc-400 hover:text-zinc-200">
-                                    {t.category.name}
-                                </Badge>
-                            ) : (
-                                <span className="text-zinc-600 text-sm">-</span>
-                            )}
+                            <div className="flex flex-col gap-1.5 items-start">
+                                {t.category ? (
+                                    <Badge variant="outline" className="border-white/10 text-zinc-400 hover:text-zinc-200">
+                                        {t.category.name}
+                                    </Badge>
+                                ) : (
+                                    <span className="text-zinc-600 text-xs">-</span>
+                                )}
+
+                                {/* Exibe a Conta/Carteira */}
+                                {t.bankAccount && (
+                                    <div className="flex items-center gap-1.5 text-xs text-zinc-500" title={t.bankAccount.name}>
+                                        <div 
+                                            className="w-1.5 h-1.5 rounded-full shrink-0" 
+                                            style={{ backgroundColor: t.bankAccount.color || "#10b981" }}
+                                        />
+                                        <span className="truncate max-w-[100px]">{t.bankAccount.name}</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
+                        {/* COLUNA VALOR */}
                         <div className="col-span-3 w-full flex flex-row md:flex-col items-center justify-between md:items-end gap-1">
                              <p className={`text-base font-bold tabular-nums ${t.type === 'INCOME' ? 'text-emerald-500' : 'text-zinc-200'}`}>
                                 {t.type === 'INCOME' ? '+' : '-'} {formatCurrency(t.amount)}
@@ -220,7 +255,7 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
                 disabled={currentPage <= 1}
             >
                 {currentPage > 1 ? (
-                    <Link href={`/transactions?query=${query}&type=${rawType || ''}&future=${showFuture}&page=${currentPage - 1}`}>
+                    <Link href={`/transactions?query=${query}&type=${rawType || ''}&bankId=${bankId || ''}&future=${showFuture}&page=${currentPage - 1}`}>
                         <ChevronLeft size={16} />
                     </Link>
                 ) : (
@@ -240,7 +275,7 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
                 disabled={currentPage >= totalPages}
             >
                 {currentPage < totalPages ? (
-                    <Link href={`/transactions?query=${query}&type=${rawType || ''}&future=${showFuture}&page=${currentPage + 1}`}>
+                    <Link href={`/transactions?query=${query}&type=${rawType || ''}&bankId=${bankId || ''}&future=${showFuture}&page=${currentPage + 1}`}>
                         <ChevronRight size={16} />
                     </Link>
                 ) : (

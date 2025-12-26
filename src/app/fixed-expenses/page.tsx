@@ -12,16 +12,25 @@ import { getAuthenticatedUser } from "@/lib/auth-check"
 export default async function RecurringPage() {
   const user = await getAuthenticatedUser()
 
-  // 1. Busca de Recorrências com sanitização de Decimal
+  // 1. Busca de Recorrências (Incluindo dados visuais da Carteira)
   const recurringsRaw = await prisma.recurringTransaction.findMany({
     where: { userId: user.id, active: true },
-    include: { category: true },
+    include: { 
+        category: true,
+        bankAccount: { select: { name: true, color: true } } 
+    },
     orderBy: { startDate: 'asc' } 
   })
 
-  // 2. Busca de Categorias com sanitização de Decimal
+  // 2. Busca de Categorias
   const rawCategories = await prisma.category.findMany({
     where: { OR: [{ userId: user.id }, { userId: null }] }
+  })
+
+  // 3. Busca de Carteiras (Para passar para os Selects de edição/criação)
+  const bankAccounts = await prisma.bankAccount.findMany({
+    where: { userId: user.id },
+    select: { id: true, name: true, color: true }
   })
 
   // --- SANITIZAÇÃO DE DADOS ---
@@ -33,7 +42,6 @@ export default async function RecurringPage() {
   const recurrings = recurringsRaw.map(rec => ({
     ...rec,
     amount: Number(rec.amount),
-    // Limpa o Decimal de dentro da categoria incluída no item
     category: rec.category ? {
       ...rec.category,
       budgetLimit: rec.category.budgetLimit ? Number(rec.category.budgetLimit) : null
@@ -64,8 +72,8 @@ export default async function RecurringPage() {
             </div>
         </div>
 
-        {/* Novo Botão com as categorias sanitizadas */}
-        <CreateRecurringSheet categories={categories}>
+        {/* Passamos accounts aqui também, caso atualize o CreateRecurringSheet futuramente */}
+        <CreateRecurringSheet categories={categories} accounts={bankAccounts}>
             <Button className="bg-white text-black hover:bg-zinc-200 font-semibold gap-2 rounded-xl">
                 <Plus size={18} /> Novo Gasto Fixo
             </Button>
@@ -118,7 +126,11 @@ export default async function RecurringPage() {
         ) : (
           <div className="grid grid-cols-1 gap-3">
             {recurrings.map(rec => (
-              <RecurringItem key={rec.id} data={rec} />
+              <RecurringItem 
+                key={rec.id} 
+                data={rec} 
+                accounts={bankAccounts} // Passa as contas para o modo edição
+              />
             ))}
           </div>
         )}

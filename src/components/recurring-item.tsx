@@ -9,6 +9,20 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
+// Interface para as contas
+interface Account {
+  id: string
+  name: string
+  color: string | null
+}
 
 interface RecurringData {
   id: string
@@ -16,15 +30,15 @@ interface RecurringData {
   amount: number | string | { toNumber: () => number } 
   paymentMethod: string
   startDate: Date
-  category: {
-    name: string
-  } | null
+  category: { name: string } | null
+  bankAccountId?: string | null // NOVO: Campo da carteira
+  bankAccount?: { name: string; color: string | null } | null // Para exibir dados da carteira
 }
 
-export function RecurringItem({ data }: { data: RecurringData }) {
+// Recebe as contas como prop
+export function RecurringItem({ data, accounts }: { data: RecurringData, accounts: Account[] }) {
   const [isEditing, setIsEditing] = useState(false)
   
-  // Helper para garantir que o valor seja um número
   const safeAmount = (val: number | string | { toNumber: () => number }) => {
     if (typeof val === 'number') return val;
     if (typeof val === 'string') return Number(val);
@@ -34,13 +48,12 @@ export function RecurringItem({ data }: { data: RecurringData }) {
 
   const initialAmount = safeAmount(data.amount);
 
-  // States para controle do formulário
-  const [amountValue, setAmountValue] = useState(initialAmount) // Valor numérico para o banco
+  // States
+  const [amountValue, setAmountValue] = useState(initialAmount)
   const [description, setDescription] = useState(data.description)
-  // Formata a data inicial para o formato que o input aceita (YYYY-MM-DD)
   const [dateValue, setDateValue] = useState(new Date(data.startDate).toISOString().split('T')[0])
+  const [bankAccountId, setBankAccountId] = useState(data.bankAccountId || "none")
 
-  // Inicializa o valor visual (R$) JÁ FORMATADO
   const [amountDisplay, setAmountDisplay] = useState(
     new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -48,38 +61,30 @@ export function RecurringItem({ data }: { data: RecurringData }) {
     }).format(initialAmount)
   )
 
-  // --- LÓGICA DA MÁSCARA BANCÁRIA ---
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // 1. Remove tudo que não é número
     const rawValue = e.target.value.replace(/\D/g, "")
-    
-    // 2. Converte para centavos (ex: "100" vira 1.00)
     const value = Number(rawValue) / 100
-    
-    // 3. Atualiza o valor real (que vai pro banco)
     setAmountValue(value)
-    
-    // 4. Atualiza o visual (R$ 1,00)
     setAmountDisplay(new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
     }).format(value))
   }
 
-  // Função para cancelar e resetar
   const handleCancel = () => {
     setIsEditing(false)
     setAmountValue(initialAmount)
     setAmountDisplay(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(initialAmount))
     setDescription(data.description)
     setDateValue(new Date(data.startDate).toISOString().split('T')[0])
+    setBankAccountId(data.bankAccountId || "none")
   }
 
   return (
-    <Card className="bg-zinc-900/40 border-white/5 hover:border-white/10 transition-all group overflow-hidden">
+    <Card className="bg-zinc-900/40 border-white/5 hover:border-white/10 transition-all group overflow-visible">
       <CardContent className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
         
-        {/* LADO ESQUERDO: Ícone e Inputs de Texto/Data */}
+        {/* LADO ESQUERDO */}
         <div className="flex items-center gap-5 flex-1">
           <div className="w-12 h-12 rounded-2xl bg-zinc-800/50 border border-white/5 flex items-center justify-center text-zinc-400 group-hover:text-primary group-hover:border-primary/20 transition-colors">
              <CalendarClock size={22} strokeWidth={1.5} />
@@ -88,7 +93,7 @@ export function RecurringItem({ data }: { data: RecurringData }) {
           <div className="flex-1 space-y-1.5">
             {isEditing ? (
               <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
-                {/* Input 1: Descrição */}
+                {/* Inputs de Edição */}
                 <Input 
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -97,16 +102,32 @@ export function RecurringItem({ data }: { data: RecurringData }) {
                   autoFocus
                 />
                 
-                {/* Input 2: DATA (Aqui está o campo que faltava) */}
-                <div className="flex items-center gap-2">
-                   <span className="text-xs text-muted-foreground whitespace-nowrap">Data Base:</span>
-                   <Input 
-                     type="date"
-                     value={dateValue}
-                     onChange={(e) => setDateValue(e.target.value)}
-                     // [color-scheme:dark] força o ícone de calendário a ficar branco
-                     className="h-8 bg-zinc-950/50 border-white/10 text-xs w-auto [color-scheme:dark] cursor-pointer focus-visible:ring-primary/30"
-                   />
+                <div className="flex flex-wrap gap-2">
+                   <div className="flex items-center gap-2 bg-zinc-950/30 p-1 rounded-md border border-white/5">
+                      <span className="text-[10px] text-muted-foreground pl-2 whitespace-nowrap">Início:</span>
+                      <Input 
+                        type="date"
+                        value={dateValue}
+                        onChange={(e) => setDateValue(e.target.value)}
+                        className="h-7 bg-transparent border-none text-xs w-auto [color-scheme:dark] cursor-pointer focus-visible:ring-0 shadow-none p-0"
+                      />
+                   </div>
+
+                   {/* SELECT DE CARTEIRA (NOVO) */}
+                   <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                      <SelectTrigger className="h-9 bg-zinc-950/50 border-white/10 text-xs w-[180px]">
+                        <div className="flex items-center gap-2">
+                           <Wallet size={12} className="text-muted-foreground" />
+                           <SelectValue placeholder="Sem Carteira" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhuma (Sem vínculo)</SelectItem>
+                        {accounts.map(acc => (
+                           <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                   </Select>
                 </div>
               </div>
             ) : (
@@ -118,13 +139,26 @@ export function RecurringItem({ data }: { data: RecurringData }) {
                     {data.category?.name || 'Geral'}
                   </Badge>
                   
-                  <div className="flex items-center gap-1.5">
-                     {data.paymentMethod === 'CREDIT_CARD' ? <CreditCard size={12} /> : <Wallet size={12} />}
-                     <span>{data.paymentMethod === 'CREDIT_CARD' ? 'Cartão' : 'Conta'}</span>
+                  <div className="flex items-center gap-1.5" title="Forma de Pagamento">
+                      {data.paymentMethod === 'CREDIT_CARD' ? <CreditCard size={12} /> : <Wallet size={12} />}
+                      <span>{data.paymentMethod === 'CREDIT_CARD' ? 'Cartão' : 'Conta'}</span>
                   </div>
+
+                  {/* Exibe Carteira Vinculada (Se existir) */}
+                  {data.bankAccount && (
+                     <>
+                        <div className="w-1 h-1 rounded-full bg-zinc-700" />
+                        <div className="flex items-center gap-1.5" title="Carteira Vinculada">
+                           <div 
+                             className="w-1.5 h-1.5 rounded-full" 
+                             style={{ backgroundColor: data.bankAccount.color || '#10b981' }} 
+                           />
+                           <span>{data.bankAccount.name}</span>
+                        </div>
+                     </>
+                  )}
                   
                   <div className="w-1 h-1 rounded-full bg-zinc-700" />
-                  
                   <span>Dia {new Date(data.startDate).getDate()}</span>
                 </div>
               </>
@@ -132,19 +166,16 @@ export function RecurringItem({ data }: { data: RecurringData }) {
           </div>
         </div>
 
-        {/* LADO DIREITO: Valor (Máscara Bancária) e Botões */}
+        {/* LADO DIREITO */}
         <div className="flex items-center gap-6 justify-between md:justify-end border-t md:border-t-0 border-white/5 pt-4 md:pt-0">
-          
-          {/* Input de Valor */}
           <div className="text-right">
             <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-0.5">Mensal</p>
             {isEditing ? (
-               // AQUI está o input com comportamento bancário
                <Input 
-                 type="text"             // Tipo texto para permitir formatação "R$"
-                 inputMode="numeric"     // Teclado numérico no celular
-                 value={amountDisplay}   // Mostra "R$ 10,00"
-                 onChange={handleAmountChange} // Aplica a lógica de /100
+                 type="text"
+                 inputMode="numeric"
+                 value={amountDisplay}
+                 onChange={handleAmountChange}
                  className="h-10 bg-zinc-950/50 border-white/10 font-bold w-36 text-right text-lg text-emerald-400 focus-visible:ring-emerald-500/30"
                />
             ) : (
@@ -154,7 +185,6 @@ export function RecurringItem({ data }: { data: RecurringData }) {
             )}
           </div>
 
-          {/* Botões */}
           <div className="flex gap-2 pl-2 md:border-l border-white/5">
             {isEditing ? (
               <>
@@ -163,6 +193,8 @@ export function RecurringItem({ data }: { data: RecurringData }) {
                   <input type="hidden" name="amount" value={amountValue} />
                   <input type="hidden" name="description" value={description} />
                   <input type="hidden" name="startDate" value={dateValue} />
+                  {/* Envia a carteira nova */}
+                  <input type="hidden" name="bankAccountId" value={bankAccountId === "none" ? "" : bankAccountId} />
                   
                   <Button 
                     type="submit" 

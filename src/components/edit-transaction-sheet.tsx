@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { updateTransaction, deleteTransaction } from "@/app/actions/transactions"
-import { Trash2, CalendarIcon, Tag, CreditCard, AlignLeft, ArrowUpCircle, ArrowDownCircle } from "lucide-react"
+import { Trash2, CalendarIcon, Tag, CreditCard, AlignLeft, ArrowUpCircle, ArrowDownCircle, Wallet } from "lucide-react"
 
 // Componentes Shadcn
 import {
@@ -25,16 +25,21 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
-// --- INTERFACES CORRIGIDAS ---
-// Definimos localmente para aceitar o budgetLimit como number vindo do Server Component
+// --- INTERFACES ---
 interface CategoryDTO {
   id: string
   name: string
   type: string
-  budgetLimit: number | null // Aqui resolve o erro do Decimal
+  budgetLimit: number | null
   userId: string | null
   createdAt: Date
   updatedAt: Date
+}
+
+// Interface para as contas
+interface AccountDTO {
+  id: string
+  name: string
 }
 
 interface TransactionProps {
@@ -45,15 +50,18 @@ interface TransactionProps {
   type: string
   paymentMethod: string
   categoryId?: string | null
+  bankAccountId?: string | null
 }
 
 interface EditSheetProps {
   children: React.ReactNode
   transaction: TransactionProps
-  categories: CategoryDTO[] // Usa a interface corrigida
+  categories: CategoryDTO[]
+  accounts: AccountDTO[] 
 }
 
-export function EditTransactionSheet({ children, transaction, categories }: EditSheetProps) {
+// AQUI ESTÁ A CORREÇÃO: Adicionamos "accounts = []" para evitar crash se vier undefined
+export function EditTransactionSheet({ children, transaction, categories, accounts = [] }: EditSheetProps) {
   const [open, setOpen] = useState(false)
   const [isMounted, setIsMounted] = useState(false) 
   
@@ -66,7 +74,10 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
   const [date, setDate] = useState(new Date(transaction.date).toISOString().split('T')[0])
   const [categoryId, setCategoryId] = useState(transaction.categoryId || "general")
   const [paymentMethod, setPaymentMethod] = useState(transaction.paymentMethod)
-  const [type, setType] = useState(transaction.type) 
+  const [type, setType] = useState(transaction.type)
+  
+  // State da Carteira (Se for null, usa "none" para o Select funcionar visualmente)
+  const [bankAccountId, setBankAccountId] = useState(transaction.bankAccountId || "none")
 
   useEffect(() => {
     const timer = setTimeout(() => setIsMounted(true), 0)
@@ -88,6 +99,8 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
     formData.set('categoryId', categoryId === "general" ? "" : categoryId)
     formData.set('paymentMethod', paymentMethod)
     formData.set('type', type)
+    // Envia o ID da conta (ou string vazia se for "none" para o backend setar null)
+    formData.set('bankAccountId', bankAccountId === "none" ? "" : bankAccountId)
 
     await updateTransaction(formData)
     setOpen(false)
@@ -213,6 +226,30 @@ export function EditTransactionSheet({ children, transaction, categories }: Edit
                             </SelectContent>
                           </Select>
                        </div>
+                    </div>
+                </div>
+
+                {/* CAMPO DE CARTEIRA (Safe map) */}
+                <div className="space-y-2">
+                    <Label className="text-xs text-zinc-500 ml-1">Carteira / Banco</Label>
+                    <div className="relative">
+                        <div className="absolute left-3 top-3 text-zinc-500 z-10">
+                            <Wallet size={16} />
+                        </div>
+                        <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                            <SelectTrigger className="pl-10 bg-zinc-950/50 border-white/10 h-11">
+                                <SelectValue placeholder="Selecione uma carteira" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">Nenhuma (Sem vínculo)</SelectItem>
+                                {/* O erro ocorria aqui quando accounts era undefined */}
+                                {accounts.map(acc => (
+                                    <SelectItem key={acc.id} value={acc.id}>
+                                        {acc.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 

@@ -3,12 +3,17 @@ import { prisma } from "@/lib/prisma"
 import { CategoryManager } from "./components/category-manager"
 import { CreditCardSettings } from "./components/credit-card-settings"
 import { ExportCsvCard } from "./components/export-csv-card"
-import { Settings, User, Shield, AlertTriangle, Terminal, Database } from "lucide-react"
+import { BankAccountManager } from "./components/bank-account-manager" // <--- Import Novo
+import { getUserBankAccounts } from "@/app/actions/bank-accounts" // <--- Import da Action
+import { Settings, User, Shield, AlertTriangle, Terminal, Database, Wallet } from "lucide-react" // <--- Import Wallet
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export default async function SettingsPage() {
   const authUser = await getAuthenticatedUser()
+
+  // Buscar contas bancárias do usuário
+  const bankAccounts = await getUserBankAccounts() // <--- Buscando dados
 
   const userSettings = await prisma.user.findUnique({
     where: { id: authUser.id },
@@ -18,6 +23,7 @@ export default async function SettingsPage() {
     }
   })
 
+  // ... (código de categorias mantém igual) ...
   const rawCategories = await prisma.category.findMany({
     where: { 
         OR: [
@@ -27,8 +33,6 @@ export default async function SettingsPage() {
     },
     orderBy: { name: 'asc' }
   })
-
-  // --- SANITIZAÇÃO DE DADOS ---
   const categories = rawCategories.map(cat => ({
     ...cat,
     budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null
@@ -39,7 +43,7 @@ export default async function SettingsPage() {
   return (
     <div className="max-w-5xl mx-auto p-6 md:p-10 pb-20 animate-in fade-in duration-700 space-y-8">
       
-      {/* HEADER */}
+      {/* HEADER (Mantém igual) */}
       <div className="flex items-center gap-4">
          <div className="p-3 bg-zinc-900 rounded-xl border border-white/10">
             <Settings size={24} className="text-zinc-400" />
@@ -54,7 +58,7 @@ export default async function SettingsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
          
-         {/* COLUNA ESQUERDA (PERFIL) */}
+         {/* COLUNA ESQUERDA (PERFIL) - Mantém igual */}
          <div className="md:col-span-4 space-y-6">
             <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-6 flex flex-col items-center text-center sticky top-24">
                 <Avatar className="h-24 w-24 mb-4 border-2 border-zinc-800 shadow-xl">
@@ -82,7 +86,16 @@ export default async function SettingsPage() {
          {/* COLUNA DIREITA (CONFIGURAÇÕES) */}
          <div className="md:col-span-8 space-y-8">
             
-            {/* SEÇÃO 1: CARTÃO */}
+            {/* SEÇÃO 1: CARTEIRAS (NOVO) - Colocamos no topo da direita por ser vital */}
+            <section className="space-y-4">
+                <div className="flex items-center gap-2 text-zinc-200">
+                    <Wallet size={16} className="text-emerald-500" />
+                    <h3 className="text-sm font-bold uppercase tracking-widest">Minhas Carteiras</h3>
+                </div>
+                <BankAccountManager initialAccounts={bankAccounts} />
+            </section>
+
+            {/* SEÇÃO 2: CARTÃO */}
             <section className="space-y-4">
                 <div className="flex items-center gap-2 text-zinc-200">
                     <Terminal size={16} className="text-emerald-500" />
@@ -94,7 +107,7 @@ export default async function SettingsPage() {
                 />
             </section>
 
-            {/* SEÇÃO 2: CATEGORIAS */}
+            {/* SEÇÃO 3: CATEGORIAS */}
             <section className="space-y-4">
                  <div className="flex items-center gap-2 text-zinc-200">
                     <Terminal size={16} className="text-emerald-500" />
@@ -106,7 +119,7 @@ export default async function SettingsPage() {
                 />
             </section>
 
-            {/* SEÇÃO 3: DADOS E RELATÓRIOS */}
+            {/* SEÇÃO 4: DADOS */}
             <section className="space-y-4">
                  <div className="flex items-center gap-2 text-zinc-200">
                     <Database size={16} className="text-emerald-500" />
@@ -115,14 +128,11 @@ export default async function SettingsPage() {
                 <ExportCsvCard />
             </section>
 
-            {/* FOOTER */}
+            {/* FOOTER - Mantém igual */}
             <div className="pt-12 pb-4 flex flex-col items-center justify-center text-zinc-700 gap-2 opacity-60">
                <div className="h-px w-32 bg-zinc-800 mb-2" />
                <p className="text-[10px] font-mono tracking-widest uppercase">
-                 Mesh System v1.0.0
-               </p>
-               <p className="text-[10px] font-mono">
-                 Build 2025.12 • Stable Channel
+                 Mesh System v1.1.0
                </p>
             </div>
          </div>

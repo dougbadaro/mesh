@@ -13,6 +13,8 @@ const transactionSchema = z.object({
   type: z.nativeEnum(TransactionType),
   paymentMethod: z.nativeEnum(PaymentMethod),
   categoryId: z.string().optional().transform(val => val === "" ? undefined : val),
+  // NOVO: Recebe o ID da carteira (trata string vazia como null)
+  bankAccountId: z.string().optional().transform(val => val === "" ? null : val), 
   installments: z.coerce.number().optional().default(0),
   isRecurring: z.string().optional(), 
   date: z.string(), 
@@ -25,6 +27,8 @@ const updateSchema = z.object({
   type: z.nativeEnum(TransactionType),
   paymentMethod: z.nativeEnum(PaymentMethod),
   categoryId: z.string().optional().transform(val => val === "" ? null : val), 
+  // NOVO: Permite atualizar a carteira
+  bankAccountId: z.string().optional().transform(val => val === "" ? null : val), 
   date: z.string(),
 })
 
@@ -69,7 +73,8 @@ export async function createTransaction(formData: FormData) {
         userId: userId,
         active: true,
         frequency: 'MONTHLY',
-        isFixed: true
+        isFixed: true,
+        // (Opcional) Se você adicionou bankAccountId na tabela RecurringTransaction, adicione aqui também
       }
     })
 
@@ -90,6 +95,7 @@ export async function createTransaction(formData: FormData) {
         paymentMethod: data.paymentMethod,
         userId: userId,
         categoryId: data.categoryId ?? null,
+        bankAccountId: data.bankAccountId ?? null, // <--- VINCULA A CARTEIRA
         date: visualDate,
         dueDate: dueDate,
         recurringId: recurring.id 
@@ -118,6 +124,7 @@ export async function createTransaction(formData: FormData) {
         paymentMethod: data.paymentMethod,
         userId: userId,
         categoryId: data.categoryId ?? null,
+        bankAccountId: data.bankAccountId ?? null, // <--- VINCULA A CARTEIRA (Mesmo sendo crédito, é bom saber a origem)
         date: visualDate, 
         dueDate: dueDate,
         currentInstallment: installmentsCount > 1 ? i + 1 : null,
@@ -125,7 +132,7 @@ export async function createTransaction(formData: FormData) {
     }
   } 
 
-  // Outros Métodos
+  // Outros Métodos (Débito, Pix, Cash)
   else {
     transactionsToCreate.push({
       amount: data.amount,
@@ -134,6 +141,7 @@ export async function createTransaction(formData: FormData) {
       paymentMethod: data.paymentMethod,
       userId: userId,
       categoryId: data.categoryId ?? null,
+      bankAccountId: data.bankAccountId ?? null, // <--- VINCULA A CARTEIRA (Essencial para o saldo)
       date: purchaseDate,
       dueDate: purchaseDate,
     })
@@ -143,8 +151,10 @@ export async function createTransaction(formData: FormData) {
     await prisma.transaction.createMany({ data: transactionsToCreate })
   }
 
+  // Atualiza também a página de settings, pois o saldo da carteira mudou
   revalidatePath('/')
   revalidatePath('/recurring')
+  revalidatePath('/settings') 
 }
 
 // --- UPDATE TRANSACTION (PROTEGIDA) ---
@@ -187,6 +197,7 @@ export async function updateTransaction(formData: FormData) {
       date: visualDate, 
       dueDate: dueDate,
       categoryId: data.categoryId, 
+      bankAccountId: data.bankAccountId, // <--- ATUALIZA A CARTEIRA
       type: data.type,
       paymentMethod: data.paymentMethod
     }
@@ -194,6 +205,7 @@ export async function updateTransaction(formData: FormData) {
 
   revalidatePath('/')
   revalidatePath('/recurring')
+  revalidatePath('/settings')
 }
 
 // --- DELETE TRANSACTION (PROTEGIDA) ---
@@ -218,4 +230,5 @@ export async function deleteTransaction(formData: FormData) {
 
   revalidatePath('/')
   revalidatePath('/recurring')
+  revalidatePath('/settings')
 }

@@ -12,7 +12,8 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   Calendar as CalendarIconLucide,
-  Repeat
+  Repeat,
+  Wallet // <--- Novo ícone
 } from "lucide-react"
 
 // Componentes Shadcn UI
@@ -36,7 +37,14 @@ interface Category {
   name: string
 }
 
-export function TransactionForm({ categories }: { categories: Category[] }) {
+// NOVO: Interface para as contas
+interface Account {
+  id: string
+  name: string
+}
+
+// NOVO: Recebemos também as 'accounts'
+export function TransactionForm({ categories, accounts }: { categories: Category[], accounts: Account[] }) {
   const formRef = useRef<HTMLFormElement>(null)
   const [isPending, setIsPending] = useState(false)
   
@@ -46,27 +54,22 @@ export function TransactionForm({ categories }: { categories: Category[] }) {
   const [categoryId, setCategoryId] = useState("general")
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   
+  // NOVO: Estado da Carteira
+  const [bankAccountId, setBankAccountId] = useState("none")
+  
   // Estados de Lógica (Recorrência/Parcelamento)
   const [isRecurring, setIsRecurring] = useState(false)
   const [isInstallment, setIsInstallment] = useState(false)
   const [installments, setInstallments] = useState(2)
 
   // Estados do Input de Valor (Máscara)
-  const [amountDisplay, setAmountDisplay] = useState("") // O que o usuário vê (R$ 0,00)
-  const [amountValue, setAmountValue] = useState(0)      // O valor real (float) para enviar
+  const [amountDisplay, setAmountDisplay] = useState("") 
+  const [amountValue, setAmountValue] = useState(0)      
 
-  // Função de Máscara de Moeda (Estilo Nubank/Inter)
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // 1. Remove tudo que não é número
     const rawValue = e.target.value.replace(/\D/g, "")
-    
-    // 2. Converte para número e divide por 100 para criar os centavos
     const value = Number(rawValue) / 100
-    
-    // 3. Atualiza o valor real
     setAmountValue(value)
-    
-    // 4. Formata para exibição (R$ X.XXX,XX)
     setAmountDisplay(new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
@@ -76,13 +79,13 @@ export function TransactionForm({ categories }: { categories: Category[] }) {
   async function handleSubmit(formData: FormData) {
     setIsPending(true)
     
-    // Injeção manual
     formData.set('type', type)
     formData.set('paymentMethod', paymentMethod)
     formData.set('categoryId', categoryId === "general" ? "" : categoryId)
     formData.set('date', date)
+    // NOVO: Envia a carteira (se for "none", envia vazio para o backend tratar como null)
+    formData.set('bankAccountId', bankAccountId === "none" ? "" : bankAccountId)
     
-    // IMPORTANTE: Enviamos o valor numérico limpo, não a string formatada
     formData.set('amount', amountValue.toString())
     
     if (isInstallment && paymentMethod === 'CREDIT_CARD') {
@@ -103,6 +106,7 @@ export function TransactionForm({ categories }: { categories: Category[] }) {
       setType("EXPENSE")
       setPaymentMethod("PIX")
       setCategoryId("general")
+      setBankAccountId("none") // Reset da carteira
       setAmountDisplay("")
       setAmountValue(0)
       formRef.current?.reset()
@@ -161,16 +165,12 @@ export function TransactionForm({ categories }: { categories: Category[] }) {
               </button>
            </div>
 
-           {/* 2. VALOR (Com Máscara Bancária) */}
+           {/* 2. VALOR */}
            <div className="space-y-2">
              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold ml-1">
                 {isInstallment ? "Valor da Parcela" : "Valor Total"}
              </Label>
              <div className="relative group">
-                {/* Usamos type="text" (ou tel) para remover as setas nativas e permitir formatação.
-                  O valor 'amountDisplay' é o que o usuário vê (R$ ...).
-                  O valor 'amountValue' é guardado no state para enviar ao banco.
-                */}
                <Input 
                  type="text" 
                  inputMode="numeric"
@@ -213,9 +213,28 @@ export function TransactionForm({ categories }: { categories: Category[] }) {
               </div>
            </div>
 
-           {/* 4. CATEGORIA E PAGAMENTO */}
+           {/* 4. CARTEIRA E CATEGORIA */}
            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+               {/* NOVO CAMPO: CARTEIRA */}
+               <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold ml-1">
+                   <Wallet size={12} /> Carteira
+                </Label>
+                <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                  <SelectTrigger className="h-12 bg-zinc-950/50 border-white/5 text-white focus:ring-primary/30">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhuma</SelectItem>
+                    {accounts.map(acc => (
+                      <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+               </div>
+
+               {/* CATEGORIA */}
+               <div className="space-y-2">
                 <Label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold ml-1">
                    <Tag size={12} /> Categoria
                 </Label>
@@ -230,17 +249,18 @@ export function TransactionForm({ categories }: { categories: Category[] }) {
                     ))}
                   </SelectContent>
                 </Select>
-             </div>
-             
-             <div className="space-y-2">
+               </div>
+           </div>
+
+           {/* 5. FORMA DE PAGAMENTO */}
+           <div className="space-y-2">
                 <Label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold ml-1">
-                   <CreditCard size={12} /> Meio
+                   <CreditCard size={12} /> Forma de Pagamento
                 </Label>
                 <Select 
                   value={paymentMethod} 
                   onValueChange={(val) => {
                     setPaymentMethod(val)
-                    // Resetamos os estados secundários ao trocar o método principal
                     setIsInstallment(false)
                     setIsRecurring(false)
                   }}
@@ -250,106 +270,98 @@ export function TransactionForm({ categories }: { categories: Category[] }) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="PIX">Pix</SelectItem>
-                    <SelectItem value="CREDIT_CARD">Crédito</SelectItem>
-                    <SelectItem value="DEBIT_CARD">Débito</SelectItem>
+                    <SelectItem value="CREDIT_CARD">Cartão de Crédito</SelectItem>
+                    <SelectItem value="DEBIT_CARD">Cartão de Débito</SelectItem>
                     <SelectItem value="CASH">Dinheiro</SelectItem>
                   </SelectContent>
                 </Select>
-             </div>
            </div>
 
-           {/* 5. LÓGICA DE CONDICIONAIS (Avançado) */}
+           {/* 6. LÓGICA CONDICIONAL */}
            <div className="pt-2 space-y-4">
-              
-              {/* CENÁRIO 1: NÃO É CARTÃO (Switch Simples) */}
-              {paymentMethod !== 'CREDIT_CARD' && (
-                <div className="flex items-center justify-between p-4 rounded-xl border border-white/5 bg-zinc-950/30 hover:bg-zinc-950/50 transition-colors">
-                  <div className="space-y-1">
-                    <Label className="text-sm font-medium text-zinc-200 cursor-pointer" onClick={() => setIsRecurring(!isRecurring)}>Despesa Fixa</Label>
-                    <p className="text-xs text-muted-foreground">Repete todo mês</p>
-                  </div>
-                  <Switch 
-                    checked={isRecurring}
-                    onCheckedChange={setIsRecurring}
-                    className="data-[state=checked]:bg-primary"
-                  />
-                </div>
-              )}
+             {paymentMethod !== 'CREDIT_CARD' && (
+               <div className="flex items-center justify-between p-4 rounded-xl border border-white/5 bg-zinc-950/30 hover:bg-zinc-950/50 transition-colors">
+                 <div className="space-y-1">
+                   <Label className="text-sm font-medium text-zinc-200 cursor-pointer" onClick={() => setIsRecurring(!isRecurring)}>Despesa Fixa</Label>
+                   <p className="text-xs text-muted-foreground">Repete todo mês</p>
+                 </div>
+                 <Switch 
+                   checked={isRecurring}
+                   onCheckedChange={setIsRecurring}
+                   className="data-[state=checked]:bg-primary"
+                 />
+               </div>
+             )}
 
-              {/* CENÁRIO 2: É CARTÃO (3 Opções: À Vista | Parcelado | Fixa) */}
-              {paymentMethod === 'CREDIT_CARD' && (
-                <div className="bg-zinc-950/30 rounded-xl p-4 border border-white/5 space-y-5 animate-in fade-in zoom-in-95 duration-300">
-                   <div className="flex items-center justify-between">
-                      <Label className="text-zinc-300 font-medium">Condição</Label>
-                      
-                      {/* Segmented Control para Cartão */}
-                      <div className="flex bg-zinc-900/80 rounded-lg p-1 border border-white/5">
-                        <Button
-                           type="button"
-                           variant="ghost"
-                           size="sm"
-                           onClick={() => { setIsRecurring(false); setIsInstallment(false) }}
-                           className={cn(
-                             "h-8 text-xs rounded-md transition-all px-3",
-                             !isRecurring && !isInstallment ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
-                           )}
-                        >
-                          À Vista
-                        </Button>
-                        <Button
-                           type="button"
-                           variant="ghost"
-                           size="sm"
-                           onClick={() => { setIsInstallment(true); setIsRecurring(false) }}
-                           className={cn(
-                             "h-8 text-xs rounded-md transition-all px-3",
-                             isInstallment ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
-                           )}
-                        >
-                          Parcelado
-                        </Button>
-                        <Button
-                           type="button"
-                           variant="ghost"
-                           size="sm"
-                           onClick={() => { setIsRecurring(true); setIsInstallment(false) }}
-                           className={cn(
-                             "h-8 text-xs rounded-md transition-all px-3 gap-1",
-                             isRecurring ? "bg-zinc-800 text-emerald-400 shadow-sm" : "text-zinc-500 hover:text-zinc-300"
-                           )}
-                        >
-                           {isRecurring && <Repeat size={10} />}
-                           Fixa
-                        </Button>
-                      </div>
-                   </div>
-
-                   {/* Slider de Parcelas (Só aparece se for Parcelado) */}
-                   {isInstallment && (
-                     <div className="animate-in slide-in-from-top-2 space-y-4 pt-2">
-                        <div className="flex justify-between items-end">
-                           <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Quantidade</span>
-                           <span className="text-xl font-bold text-primary tabular-nums leading-none">{installments}x</span>
-                        </div>
-                        <Slider 
-                          value={[installments]}
-                          min={2}
-                          max={24}
-                          step={1}
-                          onValueChange={(vals) => setInstallments(vals[0])}
-                          className="py-2 cursor-pointer"
-                        />
+             {paymentMethod === 'CREDIT_CARD' && (
+               <div className="bg-zinc-950/30 rounded-xl p-4 border border-white/5 space-y-5 animate-in fade-in zoom-in-95 duration-300">
+                  <div className="flex items-center justify-between">
+                     <Label className="text-zinc-300 font-medium">Condição</Label>
+                     <div className="flex bg-zinc-900/80 rounded-lg p-1 border border-white/5">
+                       <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { setIsRecurring(false); setIsInstallment(false) }}
+                          className={cn(
+                            "h-8 text-xs rounded-md transition-all px-3",
+                            !isRecurring && !isInstallment ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
+                          )}
+                       >
+                         À Vista
+                       </Button>
+                       <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { setIsInstallment(true); setIsRecurring(false) }}
+                          className={cn(
+                            "h-8 text-xs rounded-md transition-all px-3",
+                            isInstallment ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
+                          )}
+                       >
+                         Parcelado
+                       </Button>
+                       <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { setIsRecurring(true); setIsInstallment(false) }}
+                          className={cn(
+                            "h-8 text-xs rounded-md transition-all px-3 gap-1",
+                            isRecurring ? "bg-zinc-800 text-emerald-400 shadow-sm" : "text-zinc-500 hover:text-zinc-300"
+                          )}
+                       >
+                          {isRecurring && <Repeat size={10} />}
+                          Fixa
+                       </Button>
                      </div>
-                   )}
-                   
-                   {/* Aviso Visual para Assinatura (Só aparece se for Fixa) */}
-                   {isRecurring && (
-                      <div className="text-xs text-emerald-400/80 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/10 animate-in fade-in">
-                        Este valor será lançado na fatura todos os meses automaticamente.
-                      </div>
-                   )}
-                </div>
-              )}
+                  </div>
+
+                  {isInstallment && (
+                    <div className="animate-in slide-in-from-top-2 space-y-4 pt-2">
+                       <div className="flex justify-between items-end">
+                          <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Quantidade</span>
+                          <span className="text-xl font-bold text-primary tabular-nums leading-none">{installments}x</span>
+                       </div>
+                       <Slider 
+                         value={[installments]}
+                         min={2}
+                         max={24}
+                         step={1}
+                         onValueChange={(vals) => setInstallments(vals[0])}
+                         className="py-2 cursor-pointer"
+                       />
+                    </div>
+                  )}
+                  
+                  {isRecurring && (
+                    <div className="text-xs text-emerald-400/80 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/10 animate-in fade-in">
+                      Este valor será lançado na fatura todos os meses automaticamente.
+                    </div>
+                  )}
+               </div>
+             )}
            </div>
            
            <Button 

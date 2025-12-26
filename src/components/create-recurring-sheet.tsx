@@ -10,10 +10,11 @@ import {
   AlignLeft, 
   ArrowUpCircle, 
   ArrowDownCircle, 
-  Loader2 
+  Loader2,
+  Wallet // <--- Ícone novo
 } from "lucide-react"
 
-// --- INTERFACES CORRIGIDAS ---
+// --- INTERFACES ---
 interface CategoryDTO {
   id: string
   name: string
@@ -24,8 +25,15 @@ interface CategoryDTO {
   updatedAt: Date
 }
 
+// Interface para as contas
+interface AccountDTO {
+  id: string
+  name: string
+}
+
 interface CreateRecurringSheetProps {
   categories: CategoryDTO[]
+  accounts: AccountDTO[] // <--- Recebe as contas
   children: React.ReactNode
 }
 
@@ -49,7 +57,7 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
-export function CreateRecurringSheet({ categories, children }: CreateRecurringSheetProps) {
+export function CreateRecurringSheet({ categories, accounts = [], children }: CreateRecurringSheetProps) {
   const [open, setOpen] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -62,6 +70,9 @@ export function CreateRecurringSheet({ categories, children }: CreateRecurringSh
   const [day, setDay] = useState("5") 
   const [categoryId, setCategoryId] = useState("general")
   const [paymentMethod, setPaymentMethod] = useState("CREDIT_CARD")
+  
+  // NOVO: Estado da Carteira
+  const [bankAccountId, setBankAccountId] = useState("none")
 
   useEffect(() => {
     const timer = setTimeout(() => setIsMounted(true), 0)
@@ -92,6 +103,11 @@ export function CreateRecurringSheet({ categories, children }: CreateRecurringSh
     formData.append("date", fullDate) 
     formData.append("paymentMethod", paymentMethod)
     formData.append("isRecurring", "true") 
+    
+    // Envia a carteira (se selecionada)
+    if (bankAccountId !== "none") {
+        formData.append("bankAccountId", bankAccountId)
+    }
 
     if (categoryId !== "general") {
       formData.append("categoryId", categoryId)
@@ -106,6 +122,7 @@ export function CreateRecurringSheet({ categories, children }: CreateRecurringSh
       setAmountDisplay("R$ 0,00")
       setDescription("")
       setDay("5")
+      setBankAccountId("none") // Reset carteira
     } catch (error) {
       console.error(error)
     } finally {
@@ -126,6 +143,7 @@ export function CreateRecurringSheet({ categories, children }: CreateRecurringSh
         
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
             
+            {/* SEÇÃO DE VALOR */}
             <div className="flex flex-col items-center gap-6">
                <div className="flex p-1 bg-zinc-900 rounded-full border border-white/5 w-full max-w-[240px]">
                   <button
@@ -169,6 +187,7 @@ export function CreateRecurringSheet({ categories, children }: CreateRecurringSh
                </div>
             </div>
 
+            {/* CAMPOS */}
             <div className="space-y-5 bg-zinc-900/30 p-5 rounded-2xl border border-white/5">
                 
                 <div className="space-y-2">
@@ -222,6 +241,29 @@ export function CreateRecurringSheet({ categories, children }: CreateRecurringSh
                             </SelectContent>
                           </Select>
                        </div>
+                    </div>
+                </div>
+
+                {/* NOVO CAMPO: CARTEIRA */}
+                <div className="space-y-2">
+                    <Label className="text-xs text-zinc-500 ml-1">Carteira / Banco</Label>
+                    <div className="relative">
+                        <div className="absolute left-3 top-3 text-zinc-500 z-10">
+                            <Wallet size={16} />
+                        </div>
+                        <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                            <SelectTrigger className="pl-10 bg-zinc-950/50 border-white/10 h-11">
+                                <SelectValue placeholder="Selecione uma carteira" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">Nenhuma (Sem vínculo)</SelectItem>
+                                {accounts.map(acc => (
+                                    <SelectItem key={acc.id} value={acc.id}>
+                                        {acc.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 
