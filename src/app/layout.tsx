@@ -9,7 +9,7 @@ import { AppLayout } from "@/components/app-layout";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Mesh Finance",
+  title: "Mesh",
   description: "Sistema financeiro pessoal inteligente",
   icons: {
     icon: "/favicon.png?v=2",

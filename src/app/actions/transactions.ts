@@ -28,45 +28,36 @@ const updateSchema = z.object({
   date: z.string(),
 })
 
+// --- HELPER PARA SEGURANÇA ---
+async function getValidatedUser() {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error("Unauthorized")
+  return session.user.id
+}
+
 // --- CREATE TRANSACTION ---
 export async function createTransaction(formData: FormData) {
-  const session = await auth()
+  const userId = await getValidatedUser()
   
-  if (!session?.user?.id) {
-     throw new Error("Usuário não autenticado")
-  }
-
-  const userId = session.user.id
-  
-  // 1. BUSCA CONFIGURAÇÕES DO CARTÃO DO USUÁRIO
-  // Se não encontrar (fallback), usa 6 e 10 como padrão
   const userSettings = await prisma.user.findUnique({
     where: { id: userId },
     select: { creditCardClosingDay: true, creditCardDueDay: true }
   })
 
-  const closingDay = userSettings?.creditCardClosingDay || 6
-  const dueDay = userSettings?.creditCardDueDay || 10
+  const closingDay = userSettings?.creditCardClosingDay ?? 6
+  const dueDay = userSettings?.creditCardDueDay ?? 10
 
   const rawData = Object.fromEntries(formData.entries())
   const result = transactionSchema.safeParse(rawData)
 
-  if (!result.success) {
-    console.error(result.error.format())
-    throw new Error("Dados inválidos")
-  }
+  if (!result.success) throw new Error("Invalid Data")
 
   const data = result.data
   const purchaseDate = new Date(data.date + "T12:00:00")
-  
   const transactionsToCreate: Prisma.TransactionCreateManyInput[] = []
 
-  // ==========================================================
-  // PRIORIDADE 1: RECORRÊNCIA (Assinaturas)
-  // ==========================================================
+  // Lógica de Recorrência
   if (data.isRecurring === 'true') {
-    
-    // 1. Cria o registro Pai (Assinatura)
     const recurring = await prisma.recurringTransaction.create({
       data: {
         description: data.description,
@@ -82,30 +73,15 @@ export async function createTransaction(formData: FormData) {
       }
     })
 
-    // 2. Define o deslocamento inicial (Pular mês?)
-    // Usa a configuração dinâmica closingDay
-    let startMonthOffset = 0
-    if (data.paymentMethod === 'CREDIT_CARD' && purchaseDate.getDate() >= closingDay) {
-        startMonthOffset = 1
-    }
+    const startMonthOffset = (data.paymentMethod === 'CREDIT_CARD' && purchaseDate.getDate() >= closingDay) ? 1 : 0
 
-    // 3. Gera os lançamentos
-    const repeatMonths = 12 
-    for (let i = 0; i < repeatMonths; i++) {
+    for (let i = 0; i < 12; i++) {
       const monthIncrement = i + startMonthOffset
-
       const visualDate = new Date(purchaseDate)
       visualDate.setMonth(purchaseDate.getMonth() + monthIncrement)
       
-      let dueDate = new Date(visualDate)
-
-      if (data.paymentMethod === 'CREDIT_CARD') {
-         // Usa a configuração dinâmica dueDay
-         dueDate.setDate(dueDay)
-         // O mês do vencimento acompanha o mês visual
-      } else {
-         dueDate = visualDate
-      }
+      const dueDate = new Date(visualDate)
+      if (data.paymentMethod === 'CREDIT_CARD') dueDate.setDate(dueDay)
 
       transactionsToCreate.push({
         amount: data.amount, 
@@ -121,39 +97,23 @@ export async function createTransaction(formData: FormData) {
     }
   }
 
-  // ==========================================================
-  // PRIORIDADE 2: CARTÃO DE CRÉDITO (Parcelado ou À Vista)
-  // ==========================================================
+  // Lógica de Cartão de Crédito
   else if (data.paymentMethod === 'CREDIT_CARD') {
-    
-    let startMonthOffset = 0
-    // Usa closingDay dinâmico
-    if (purchaseDate.getDate() >= closingDay) {
-       startMonthOffset = 1
-    }
-
+    const startMonthOffset = purchaseDate.getDate() >= closingDay ? 1 : 0
     const installmentsCount = (data.installments && data.installments > 1) ? data.installments : 1
-    const amountPerInstallment = data.amount 
 
     for (let i = 0; i < installmentsCount; i++) {
       const monthIncrement = startMonthOffset + i
-
       const visualDate = new Date(purchaseDate)
       visualDate.setMonth(purchaseDate.getMonth() + monthIncrement)
 
       const dueDate = new Date(purchaseDate)
-      // Usa dueDay dinâmico
       dueDate.setDate(dueDay) 
       dueDate.setMonth(purchaseDate.getMonth() + monthIncrement)
 
-      let description = data.description
-      if (installmentsCount > 1) {
-        description = `${data.description} (${i + 1}/${installmentsCount})`
-      }
-
       transactionsToCreate.push({
-        amount: amountPerInstallment,
-        description: description,
+        amount: data.amount,
+        description: installmentsCount > 1 ? `${data.description} (${i + 1}/${installmentsCount})` : data.description,
         type: data.type,
         paymentMethod: data.paymentMethod,
         userId: userId,
@@ -165,9 +125,7 @@ export async function createTransaction(formData: FormData) {
     }
   } 
 
-  // ==========================================================
-  // PRIORIDADE 3: OUTROS (Pix, Débito, etc)
-  // ==========================================================
+  // Outros Métodos
   else {
     transactionsToCreate.push({
       amount: data.amount,
@@ -182,44 +140,27 @@ export async function createTransaction(formData: FormData) {
   }
 
   if (transactionsToCreate.length > 0) {
-    await prisma.transaction.createMany({
-      data: transactionsToCreate
-    })
+    await prisma.transaction.createMany({ data: transactionsToCreate })
   }
 
   revalidatePath('/')
   revalidatePath('/recurring')
 }
 
-
-// --- UPDATE TRANSACTION ---
+// --- UPDATE TRANSACTION (PROTEGIDA) ---
 export async function updateTransaction(formData: FormData) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Não autorizado")
+  const userId = await getValidatedUser()
 
-  const userId = session.user.id
-
-  // 1. BUSCA CONFIGURAÇÕES TAMBÉM NA EDIÇÃO
   const userSettings = await prisma.user.findUnique({
     where: { id: userId },
     select: { creditCardClosingDay: true, creditCardDueDay: true }
   })
 
-  const closingDay = userSettings?.creditCardClosingDay || 6
-  const dueDay = userSettings?.creditCardDueDay || 10
+  const closingDay = userSettings?.creditCardClosingDay ?? 6
+  const dueDay = userSettings?.creditCardDueDay ?? 10
 
-  const rawData = {
-    id: formData.get('id'),
-    description: formData.get('description'),
-    amount: formData.get('amount'),
-    date: formData.get('date'),
-    categoryId: formData.get('categoryId'),
-    type: formData.get('type'),
-    paymentMethod: formData.get('paymentMethod'),
-  }
-
-  const result = updateSchema.safeParse(rawData)
-  if (!result.success) throw new Error("Dados inválidos")
+  const result = updateSchema.safeParse(Object.fromEntries(formData.entries()))
+  if (!result.success) throw new Error("Invalid Data")
 
   const data = result.data
   const purchaseDate = new Date(data.date + "T12:00:00")
@@ -227,21 +168,19 @@ export async function updateTransaction(formData: FormData) {
   const visualDate = new Date(purchaseDate)
   const dueDate = new Date(purchaseDate)
 
-  // Reaplica regra do cartão na edição com dados dinâmicos
   if (data.paymentMethod === 'CREDIT_CARD') {
-     let startMonthOffset = 0
-     if (purchaseDate.getDate() >= closingDay) {
-        startMonthOffset = 1
-     }
-     
-     visualDate.setMonth(purchaseDate.getMonth() + startMonthOffset)
-     
-     dueDate.setDate(dueDay)
-     dueDate.setMonth(purchaseDate.getMonth() + startMonthOffset)
+    const offset = purchaseDate.getDate() >= closingDay ? 1 : 0
+    visualDate.setMonth(purchaseDate.getMonth() + offset)
+    dueDate.setMonth(purchaseDate.getMonth() + offset)
+    dueDate.setDate(dueDay)
   }
 
+  // SEGURANÇA: userId no WHERE garante que só edita se for o dono
   await prisma.transaction.update({
-    where: { id: data.id },
+    where: { 
+      id: data.id,
+      userId: userId 
+    },
     data: {
       description: data.description,
       amount: data.amount,
@@ -257,19 +196,24 @@ export async function updateTransaction(formData: FormData) {
   revalidatePath('/recurring')
 }
 
-
-// --- DELETE TRANSACTION ---
+// --- DELETE TRANSACTION (PROTEGIDA) ---
 export async function deleteTransaction(formData: FormData) {
-  const session = await auth()
-  if (!session?.user?.id) return
-
+  const userId = await getValidatedUser()
   const id = formData.get('id') as string
+
   if (!id) return
 
+  // SEGURANÇA: userId no WHERE impede que deletem dados de terceiros
   try {
-    await prisma.transaction.delete({ where: { id } })
+    await prisma.transaction.delete({ 
+      where: { 
+        id: id,
+        userId: userId
+      } 
+    })
   } catch (error) {
-    console.error("Erro ao deletar:", error)
+    console.error("Delete Error:", error)
+    throw new Error("Failed to delete or unauthorized")
   }
 
   revalidatePath('/')
