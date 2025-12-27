@@ -4,7 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { auth } from "@/auth";
 import { AppLayout } from "@/components/app-layout";
-import { Toaster } from "@/components/ui/sonner"; // <--- 1. IMPORTAÇÃO NOVA
+import { Toaster } from "@/components/ui/sonner";
 
 // Inter é a fonte mais próxima da San Francisco (Apple)
 const inter = Inter({ subsets: ["latin"] });
@@ -40,6 +40,9 @@ export default async function RootLayout({
   return (
     <html lang="pt-BR" className="dark h-full" suppressHydrationWarning>
       <body 
+        // AQUI ESTÁ A CORREÇÃO:
+        // Isso impede que o React reclame de atributos injetados por extensões (como ColorZilla/LastPass)
+        suppressHydrationWarning={true}
         className={cn(
           inter.className, 
           // 1. bg-zinc-950: Fundo preto "matte" (não preto absoluto #000).
