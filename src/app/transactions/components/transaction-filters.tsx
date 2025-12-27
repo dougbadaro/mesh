@@ -15,7 +15,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-// Interface para receber as contas
 interface Account {
   id: string
   name: string
@@ -28,7 +27,7 @@ export function TransactionFilters({ accounts }: { accounts: Account[] }) {
 
   const defaultSearch = searchParams.get('query')?.toString()
   const defaultType = searchParams.get('type')?.toString()
-  const defaultBank = searchParams.get('bankId')?.toString() // Novo Filtro
+  const defaultBank = searchParams.get('bankId')?.toString()
   const showFuture = searchParams.get('future') === 'true'
 
   const handleSearch = useDebouncedCallback((term: string) => {
@@ -47,7 +46,6 @@ export function TransactionFilters({ accounts }: { accounts: Account[] }) {
     replace(`${pathname}?${params.toString()}`)
   }
 
-  // Novo Handler para Carteira
   const handleBankChange = (value: string) => {
     const params = new URLSearchParams(searchParams)
     params.set('page', '1')
@@ -69,48 +67,51 @@ export function TransactionFilters({ accounts }: { accounts: Account[] }) {
   }
 
   return (
-    <div className="flex flex-col gap-4 mb-6">
+    <div className="space-y-4 mb-6">
       
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+      {/* LINHA SUPERIOR: Busca e Selects */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
         {/* Campo de Busca */}
-        <div className="relative sm:col-span-6 lg:col-span-5">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
+        <div className="relative md:col-span-5 lg:col-span-6 group">
+            <div className="absolute left-3 top-2.5 text-zinc-500 group-focus-within:text-white transition-colors">
+                <Search size={16} />
+            </div>
             <Input
-            placeholder="Buscar por descrição..."
-            className="pl-9 bg-zinc-900/50 border-white/10 text-white placeholder:text-zinc-600 focus-visible:ring-emerald-500/20"
-            defaultValue={defaultSearch}
-            onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Buscar..."
+              className="pl-9 bg-zinc-900/50 border-white/10 text-white placeholder:text-zinc-600 focus-visible:ring-white/10 h-9 text-sm rounded-xl"
+              defaultValue={defaultSearch}
+              onChange={(e) => handleSearch(e.target.value)}
             />
         </div>
 
         {/* Filtro de Tipo */}
-        <div className="sm:col-span-3 lg:col-span-2">
+        <div className="md:col-span-3 lg:col-span-3">
             <Select defaultValue={defaultType || "ALL"} onValueChange={handleTypeChange}>
-            <SelectTrigger className="bg-zinc-900/50 border-white/10 text-zinc-200">
+            <SelectTrigger className="bg-zinc-900/50 border-white/10 text-zinc-300 h-9 text-sm rounded-xl focus:ring-white/10">
                 <div className="flex items-center gap-2">
                     <Filter size={14} className="text-zinc-500" />
                     <SelectValue placeholder="Tipo" />
                 </div>
             </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="ALL">Todos</SelectItem>
-                <SelectItem value="INCOME">Receitas</SelectItem>
-                <SelectItem value="EXPENSE">Despesas</SelectItem>
+            <SelectContent className="bg-zinc-900 border-white/10">
+                <SelectItem value="ALL">Todos os Tipos</SelectItem>
+                <SelectItem value="INCOME">Entradas</SelectItem>
+                <SelectItem value="EXPENSE">Saídas</SelectItem>
             </SelectContent>
             </Select>
         </div>
 
-        {/* NOVO: Filtro de Carteira */}
-        <div className="sm:col-span-3 lg:col-span-3">
+        {/* Filtro de Carteira */}
+        <div className="md:col-span-4 lg:col-span-3">
             <Select defaultValue={defaultBank || "ALL"} onValueChange={handleBankChange}>
-            <SelectTrigger className="bg-zinc-900/50 border-white/10 text-zinc-200">
+            <SelectTrigger className="bg-zinc-900/50 border-white/10 text-zinc-300 h-9 text-sm rounded-xl focus:ring-white/10">
                 <div className="flex items-center gap-2">
                     <Wallet size={14} className="text-zinc-500" />
-                    <SelectValue placeholder="Carteira" />
+                    <SelectValue placeholder="Todas as Contas" />
                 </div>
             </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="ALL">Todas as Carteiras</SelectItem>
+            <SelectContent className="bg-zinc-900 border-white/10">
+                <SelectItem value="ALL">Todas as Contas</SelectItem>
                 {accounts.map(acc => (
                     <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
                 ))}
@@ -119,20 +120,22 @@ export function TransactionFilters({ accounts }: { accounts: Account[] }) {
         </div>
       </div>
 
-      {/* Linha Inferior de Filtros */}
-      <div className="flex items-center justify-between bg-zinc-900/30 p-3 rounded-lg border border-white/5">
+      {/* LINHA INFERIOR: Toggles e Limpeza */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/[0.02] p-2 px-3 rounded-xl border border-white/5">
          
-         <div className="flex items-center space-x-3">
-            <Switch 
-                id="future-mode" 
-                checked={showFuture}
-                onCheckedChange={handleFutureToggle}
-                className="data-[state=checked]:bg-emerald-500"
-            />
-            <Label htmlFor="future-mode" className="text-sm text-zinc-400 cursor-pointer flex items-center gap-2">
-                <CalendarClock size={16} className={showFuture ? "text-emerald-500" : "text-zinc-500"} />
-                Exibir lançamentos futuros
-            </Label>
+         <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+                <Switch 
+                    id="future-mode" 
+                    checked={showFuture}
+                    onCheckedChange={handleFutureToggle}
+                    className="data-[state=checked]:bg-emerald-500 scale-75 origin-left"
+                />
+                <Label htmlFor="future-mode" className="text-xs text-zinc-400 cursor-pointer hover:text-white transition-colors flex items-center gap-1.5 select-none">
+                    <CalendarClock size={14} className={showFuture ? "text-emerald-500" : "text-zinc-600"} />
+                    Exibir futuros
+                </Label>
+            </div>
          </div>
 
          {(defaultSearch || defaultType || defaultBank || showFuture) && (
@@ -140,9 +143,9 @@ export function TransactionFilters({ accounts }: { accounts: Account[] }) {
                 variant="ghost" 
                 size="sm" 
                 onClick={clearFilters}
-                className="text-zinc-500 hover:text-white hover:bg-white/5 px-3 h-8 text-xs"
+                className="text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 px-3 h-7 text-[10px] uppercase font-bold tracking-wide rounded-lg transition-all"
             >
-                <X size={14} className="mr-2" />
+                <X size={12} className="mr-1.5" />
                 Limpar Filtros
             </Button>
          )}
