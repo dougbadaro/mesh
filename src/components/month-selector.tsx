@@ -1,14 +1,14 @@
 'use client'
 
-import { useRouter, useSearchParams } from "next/navigation"
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export function MonthSelector() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  // Lê os params da URL ou usa a data atual
   const currentMonth = searchParams.get('month') 
     ? Number(searchParams.get('month')) 
     : new Date().getMonth()
@@ -17,10 +17,8 @@ export function MonthSelector() {
     ? Number(searchParams.get('year')) 
     : new Date().getFullYear()
 
-  // Data atual baseada na URL
   const date = new Date(currentYear, currentMonth, 1)
 
-  // Função para navegar
   const handleNavigate = (direction: 'prev' | 'next') => {
     const newDate = new Date(date)
     if (direction === 'prev') {
@@ -29,40 +27,43 @@ export function MonthSelector() {
       newDate.setMonth(newDate.getMonth() + 1)
     }
 
-    // Atualiza a URL sem recarregar a página inteira
     const params = new URLSearchParams(searchParams)
     params.set('month', newDate.getMonth().toString())
     params.set('year', newDate.getFullYear().toString())
     
-    router.push(`/?${params.toString()}`)
+    router.push(`${pathname}?${params.toString()}`)
   }
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-full border border-white/5 backdrop-blur-md shadow-sm">
+      
+      {/* Botão Anterior */}
       <Button 
-        variant="outline" 
+        variant="ghost" 
         size="icon" 
         onClick={() => handleNavigate('prev')}
-        className="h-8 w-8 bg-zinc-900/50 border-white/10 hover:bg-white/5"
+        className="h-7 w-7 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
       >
-        <ChevronLeft size={16} />
+        <ChevronLeft size={14} />
       </Button>
       
-      <div className="flex items-center gap-2 min-w-[140px] justify-center bg-zinc-900/50 border border-white/10 px-4 py-1.5 rounded-md text-sm font-medium text-zinc-200">
-        <Calendar size={14} className="text-muted-foreground" />
-        <span className="capitalize">
+      {/* Texto Central (Compacto) */}
+      <div className="px-2 min-w-[110px] text-center">
+        <span className="text-xs font-semibold text-zinc-200 capitalize select-none tracking-wide">
           {date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
         </span>
       </div>
 
+      {/* Botão Próximo */}
       <Button 
-        variant="outline" 
+        variant="ghost" 
         size="icon" 
         onClick={() => handleNavigate('next')}
-        className="h-8 w-8 bg-zinc-900/50 border-white/10 hover:bg-white/5"
+        className="h-7 w-7 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
       >
-        <ChevronRight size={16} />
+        <ChevronRight size={14} />
       </Button>
+      
     </div>
   )
 }

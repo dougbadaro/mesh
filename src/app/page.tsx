@@ -7,10 +7,12 @@ import {
   Wallet,
   CreditCard as CreditCardIcon,
   Receipt,
-  Pencil
+  Pencil,
+  TrendingUp,
+  Activity
 } from "lucide-react";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FinancialCharts, ChartData } from "@/components/charts";
 import { MonthSelector } from "@/components/month-selector";
@@ -25,7 +27,7 @@ interface DashboardProps {
 }
 
 export default async function Dashboard(props: DashboardProps) {
-  // 1. SEGURANÇA
+  // 1. SEGURANÇA E PARAMS
   const user = await getAuthenticatedUser();
   const userId = user.id;
 
@@ -61,7 +63,7 @@ export default async function Dashboard(props: DashboardProps) {
 
   // 3. BUSCA DE DADOS
   const [cashTransactions, monthlyTransactions, allFutureTransactions, rawCategories] = await Promise.all([
-    // A. Transações Históricas
+    // A. Histórico (para calcular saldo acumulado)
     prisma.transaction.findMany({
       where: { 
         userId: userId,
@@ -71,7 +73,7 @@ export default async function Dashboard(props: DashboardProps) {
       orderBy: { date: 'asc' }
     }),
 
-    // B. Transações do Mês (ATUALIZADO: Inclui bankAccount)
+    // B. Mês Atual (para exibir na lista e gráficos)
     prisma.transaction.findMany({
       where: {
         userId: userId,
@@ -81,11 +83,11 @@ export default async function Dashboard(props: DashboardProps) {
       orderBy: { date: 'desc' }, 
       include: { 
           category: true,
-          bankAccount: { select: { name: true, color: true } } // <--- AGORA BUSCAMOS O NOME DO BANCO
+          bankAccount: { select: { name: true, color: true } }
       }
     }),
 
-    // C. Transações Futuras
+    // C. Futuro (para o Widget de Cartão)
     prisma.transaction.findMany({
       where: { 
         userId: userId,
@@ -95,13 +97,13 @@ export default async function Dashboard(props: DashboardProps) {
       include: { category: true }
     }),
 
-    // D. Categorias
+    // D. Categorias (para formulários)
     prisma.category.findMany({
       where: { OR: [{ userId: userId }, { userId: null }] }
     })
   ]);
 
-  // 4. SANITIZAÇÃO DE DADOS
+  // 4. SANITIZAÇÃO
   const categories = rawCategories.map(cat => ({
     ...cat,
     budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null
@@ -124,6 +126,7 @@ export default async function Dashboard(props: DashboardProps) {
       const val = Number(t.amount);
       const isIncome = t.type === TransactionType.INCOME;
 
+      // Atualiza saldo individual de cada conta
       if (t.bankAccountId) {
           const accIndex = accountsWithBalance.findIndex(a => a.id === t.bankAccountId);
           if (accIndex >= 0) {
@@ -134,8 +137,8 @@ export default async function Dashboard(props: DashboardProps) {
           }
       }
 
+      // Atualiza saldo geral (se não for conta oculta)
       const isVisible = !t.bankAccountId || !hiddenAccountIds.includes(t.bankAccountId);
-
       if (isVisible) {
           if (tDate < startTime) {
              if (isIncome) startingBalance += val;
@@ -149,13 +152,10 @@ export default async function Dashboard(props: DashboardProps) {
       }
   });
 
-  // 6. PREPARAÇÃO DE LISTAS
+  // 6. PREPARAÇÃO DE DADOS VISUAIS
   const listItemsNonCredit = monthlyTransactions
     .filter(t => t.paymentMethod !== 'CREDIT_CARD')
-    .map(t => ({
-      ...t,
-      amount: Number(t.amount)
-    }));
+    .map(t => ({ ...t, amount: Number(t.amount) }));
 
   const listItemsCredit = monthlyTransactions.filter(t => t.paymentMethod === 'CREDIT_CARD');
   const monthlyInvoiceTotal = listItemsCredit.reduce((acc, t) => acc + Number(t.amount), 0);
@@ -190,117 +190,144 @@ export default async function Dashboard(props: DashboardProps) {
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
-    <div className="max-w-[1600px] mx-auto p-6 md:p-8 space-y-6 pb-20 animate-in fade-in duration-700">
+    <div className="space-y-6 animate-in fade-in duration-700">
       
+      {/* HEADER PAGE - Clean e Pequeno */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Visão Geral</h1>
-          <p className="text-sm text-muted-foreground">Gerencie suas finanças de forma inteligente.</p>
+          <h1 className="text-xl font-bold tracking-tight text-white">Visão Geral</h1>
+          <p className="text-xs text-zinc-400 mt-0.5">
+             Resumo financeiro de {startOfMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}.
+          </p>
         </div>
         <MonthSelector />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         
-        {/* COLUNA ESQUERDA */}
-        <div className="lg:col-span-8 space-y-6">
+        {/* COLUNA ESQUERDA (Principal) */}
+        <div className="xl:col-span-8 space-y-6">
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="bg-zinc-900/60 backdrop-blur border-white/5 shadow-sm">
-               <CardContent className="p-6">
-                 <div className="flex justify-between items-start mb-4">
+          {/* CARDS DE KPI (Compactos) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* CARD SALDO */}
+            <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 shadow-lg shadow-black/5 rounded-3xl overflow-hidden relative group">
+               <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+               <CardContent className="p-5 relative">
+                 <div className="flex justify-between items-start mb-3">
                     <div>
-                        <p className="text-sm font-medium text-zinc-400">
-                          {isPastMonth ? "Saldo (Fim do mês)" : "Saldo Disponível Total"}
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                          {isPastMonth ? "Saldo Final" : "Disponível"}
                         </p>
-                        <h2 className={`text-3xl font-bold tracking-tight mt-1 ${currentBalance < 0 ? 'text-rose-400' : 'text-white'}`}>
+                        <h2 className={`text-3xl font-bold tracking-tight mt-0.5 ${currentBalance < 0 ? 'text-rose-400' : 'text-white'}`}>
                             {formatCurrency(currentBalance)}
                         </h2>
                     </div>
-                    <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg border border-emerald-500/10">
-                        <Wallet size={20} />
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/10">
+                        <Wallet size={16} />
                     </div>
                  </div>
-                 <div className="flex gap-3">
-                    <div className="flex items-center gap-2 bg-white/5 border border-white/5 px-2.5 py-1.5 rounded-md">
-                      <ArrowUpRight size={14} className="text-emerald-500" />
-                      <span className="text-emerald-500 text-xs font-semibold">
-                        Entradas: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: "compact" }).format(monthIncome)}
-                      </span>
+                 
+                 <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-white/5 border border-white/5 p-2.5 rounded-xl">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                         <div className="p-0.5 rounded-full bg-emerald-500/20 text-emerald-400"><ArrowUpRight size={10} /></div>
+                         <span className="text-[9px] text-zinc-400 uppercase font-bold">Entradas</span>
+                      </div>
+                      <p className="text-sm font-semibold text-emerald-400 leading-none">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: "compact" }).format(monthIncome)}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-2 bg-white/5 border border-white/5 px-2.5 py-1.5 rounded-md">
-                      <ArrowDownLeft size={14} className="text-rose-500" />
-                      <span className="text-rose-500 text-xs font-semibold">
-                        Saídas: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: "compact" }).format(monthExpense)}
-                      </span>
+                    <div className="bg-white/5 border border-white/5 p-2.5 rounded-xl">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                         <div className="p-0.5 rounded-full bg-rose-500/20 text-rose-400"><ArrowDownLeft size={10} /></div>
+                         <span className="text-[9px] text-zinc-400 uppercase font-bold">Saídas</span>
+                      </div>
+                      <p className="text-sm font-semibold text-rose-400 leading-none">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: "compact" }).format(monthExpense)}
+                      </p>
                     </div>
                  </div>
                </CardContent>
             </Card>
 
-            <Card className="bg-zinc-900/60 backdrop-blur border-white/5 shadow-sm">
-               <CardContent className="p-6">
-                  <div className="flex justify-between items-start mb-4">
+            {/* CARD FATURA */}
+            <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 shadow-lg shadow-black/5 rounded-3xl overflow-hidden relative group">
+               <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+               <CardContent className="p-5 relative flex flex-col h-full">
+                  <div className="flex justify-between items-start mb-3">
                     <div>
-                      <p className="text-sm font-medium text-zinc-400">Fatura de {startOfMonth.toLocaleString('pt-BR', { month: 'long' })}</p>
-                      <h3 className="text-3xl font-bold text-white tracking-tight mt-1">
+                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Fatura Atual</p>
+                      <h3 className="text-3xl font-bold text-white tracking-tight mt-0.5">
                         {formatCurrency(monthlyInvoiceTotal)}
                       </h3>
                     </div>
-                    <div className="p-2 bg-rose-500/10 text-rose-500 rounded-lg border border-rose-500/10">
-                      <CreditCardIcon size={20} />
+                    <div className="w-9 h-9 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500 border border-rose-500/10">
+                      <CreditCardIcon size={16} />
                     </div>
                   </div>
-                  <p className="text-xs text-zinc-500">
-                    Acumulado no cartão (Não descontado do saldo).
-                  </p>
+                  <div className="mt-auto">
+                     <div className="flex items-center gap-2 text-zinc-500 text-[10px] bg-white/5 p-2.5 rounded-xl border border-white/5">
+                        <Activity size={12} />
+                        <span>Acumulado no cartão</span>
+                     </div>
+                  </div>
                </CardContent>
             </Card>
           </div>
 
-          <div className="rounded-xl overflow-hidden border border-white/5 shadow-sm">
-             <div className="bg-zinc-900/60 backdrop-blur p-5 border-b border-white/5">
-                <h3 className="font-semibold text-sm text-zinc-200 uppercase tracking-wider">Fluxo de Caixa Mensal</h3>
-             </div>
-             <div className="bg-zinc-900/30 p-5">
-                <FinancialCharts data={chartData} initialBalance={startingBalance} />
-             </div>
-          </div>
+          {/* GRÁFICO (Altura controlada) */}
+          <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 shadow-lg shadow-black/5 rounded-3xl overflow-hidden">
+             <CardHeader className="border-b border-white/5 px-6 py-4">
+                <CardTitle className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-widest">
+                   <TrendingUp size={14} />
+                   Fluxo de Caixa
+                </CardTitle>
+             </CardHeader>
+             <CardContent className="p-5">
+                <div className="h-[280px] w-full">
+                   <FinancialCharts data={chartData} initialBalance={startingBalance} />
+                </div>
+             </CardContent>
+          </Card>
 
-          <div className="space-y-4">
-              <div className="flex items-center justify-between px-1">
-                <h3 className="font-semibold text-sm text-zinc-200 uppercase tracking-wider">
-                  Extrato de {startOfMonth.toLocaleString('pt-BR', { month: 'long' })}
-                </h3>
-              </div>
+          {/* LISTA DE TRANSAÇÕES */}
+          <div className="space-y-3">
+              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-2">
+                Últimas Movimentações
+              </h3>
               
-              <Card className="bg-zinc-900/60 backdrop-blur border-white/5 overflow-hidden">
+              <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 rounded-3xl overflow-hidden shadow-lg shadow-black/5">
                 {monthlyTransactions.length === 0 ? (
-                   <div className="p-10 text-center text-sm text-zinc-500">Nenhuma movimentação neste mês.</div>
+                   <div className="p-10 text-center flex flex-col items-center gap-2 text-zinc-500">
+                      <Receipt size={24} className="opacity-20" />
+                      <p className="text-xs">Nenhuma movimentação neste período.</p>
+                   </div>
                 ) : (
-                   <div className="divide-y divide-white/5 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                   <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto custom-scrollbar">
                       
+                      {/* Resumo da Fatura (Se houver) */}
                       {monthlyInvoiceTotal > 0 && (
-                         <div className="flex items-center justify-between p-4 bg-rose-500/5 border-l-2 border-rose-500/50">
-                            <div className="flex items-center gap-4">
-                               <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-rose-500/10 text-rose-500">
-                                  <Receipt size={16} />
+                         <div className="flex items-center justify-between p-3 px-5 bg-rose-500/5 border-l-2 border-rose-500/50">
+                            <div className="flex items-center gap-3">
+                               <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-500/10 text-rose-500">
+                                  <Receipt size={14} />
                                </div>
                                <div>
-                                  <p className="text-sm font-medium text-white">Fatura de Cartão de Crédito</p>
+                                  <p className="text-xs font-bold text-white">Fatura Cartão</p>
                                   <p className="text-[10px] text-zinc-400">
                                      {listItemsCredit.length} compras agrupadas
                                   </p>
                                </div>
                             </div>
-                            <div className="text-right">
-                               <p className="text-sm font-bold tabular-nums text-rose-400">
-                                  - {formatCurrency(monthlyInvoiceTotal)}
-                               </p>
-                            </div>
+                            <p className="text-xs font-bold tabular-nums text-rose-400">
+                               - {formatCurrency(monthlyInvoiceTotal)}
+                            </p>
                          </div>
                       )}
 
+                      {/* Lista Individual */}
                       {listItemsNonCredit.map((t) => (
                         <EditTransactionSheet 
                            key={t.id} 
@@ -318,25 +345,23 @@ export default async function Dashboard(props: DashboardProps) {
                            }}
                         >
                           <div 
-                            className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition group cursor-pointer outline-none focus-visible:bg-white/5 text-left"
+                            className="w-full flex items-center justify-between p-3 px-5 hover:bg-white/5 transition duration-200 group cursor-pointer"
                             role="button"
-                            tabIndex={0}
                           >
-                             <div className="flex items-center gap-4">
-                               <div className={`w-9 h-9 rounded-lg flex items-center justify-center border border-transparent transition-colors ${
+                             <div className="flex items-center gap-3">
+                               <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
                                  t.type === 'INCOME' 
-                                   ? 'bg-emerald-500/10 text-emerald-500 group-hover:border-emerald-500/20' 
-                                   : 'bg-zinc-800 text-zinc-400 border-white/5 group-hover:text-zinc-200'
+                                   ? 'bg-emerald-500/10 text-emerald-500' 
+                                   : 'bg-zinc-800 text-zinc-400'
                                }`}>
                                   {t.type === 'INCOME' ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
                                </div>
                                
-                               <div>
-                                 <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition">{t.description}</p>
+                               <div className="overflow-hidden">
+                                 <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition truncate max-w-[180px] md:max-w-[250px]">{t.description}</p>
                                  <div className="flex items-center gap-2 text-[10px] text-zinc-500 mt-0.5">
                                    <span>{formatDate(t.date)}</span>
                                    
-                                   {/* MOSTRAR CATEGORIA */}
                                    {t.category && (
                                      <>
                                        <span className="w-0.5 h-0.5 rounded-full bg-zinc-600" />
@@ -344,12 +369,10 @@ export default async function Dashboard(props: DashboardProps) {
                                      </>
                                    )}
 
-                                   {/* MOSTRAR BANCO / CARTEIRA */}
                                    {t.bankAccount && (
                                      <>
                                        <span className="w-0.5 h-0.5 rounded-full bg-zinc-600" />
-                                       <span className="flex items-center gap-1 text-zinc-400">
-                                          {/* Bolinha Colorida do Banco */}
+                                       <span className="flex items-center gap-1">
                                           <div 
                                             className="w-1.5 h-1.5 rounded-full" 
                                             style={{ backgroundColor: t.bankAccount.color || '#10b981' }} 
@@ -364,17 +387,17 @@ export default async function Dashboard(props: DashboardProps) {
 
                              <div className="flex items-center gap-4">
                                  <div className="text-right">
-                                   <p className={`text-sm font-bold tabular-nums ${t.type === 'INCOME' ? 'text-emerald-500' : 'text-zinc-200'}`}>
+                                   <p className={`text-xs font-bold tabular-nums ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-zinc-200'}`}>
                                       {t.type === 'INCOME' ? '+' : '-'} {formatCurrency(Number(t.amount))}
                                    </p>
-                                   <div className="flex items-center justify-end gap-1.5 mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                                      <span className="text-[10px] text-zinc-500 capitalize">
+                                   <p className="text-[9px] text-zinc-500 capitalize mt-0.5">
                                         {t.paymentMethod.toLowerCase().replace('_', ' ')}
-                                      </span>
-                                   </div>
+                                   </p>
                                  </div>
-                                 <div className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-800/50 text-zinc-600 group-hover:bg-zinc-800 group-hover:text-zinc-300 transition-all border border-transparent group-hover:border-white/10">
-                                    <Pencil size={14} />
+                                 <div className="opacity-0 group-hover:opacity-100 transition-opacity -mr-1">
+                                    <div className="p-1.5 bg-white/10 rounded-full text-white">
+                                        <Pencil size={12} />
+                                    </div>
                                  </div>
                              </div>
                           </div>
@@ -386,22 +409,29 @@ export default async function Dashboard(props: DashboardProps) {
           </div>
         </div>
 
-        {/* COLUNA DIREITA */}
-        <div className="lg:col-span-4 space-y-6">
+        {/* COLUNA DIREITA (Widgets) */}
+        <div className="xl:col-span-4 space-y-6">
+           
            <BankAccountsWidget accounts={accountsWithBalance} />
 
-           <Tabs defaultValue="manual" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-zinc-900/50 mb-4">
-                <TabsTrigger value="manual">Manual</TabsTrigger>
-                <TabsTrigger value="import">Importar</TabsTrigger>
-              </TabsList>
-              <TabsContent value="manual">
-                <TransactionForm categories={categories} accounts={bankAccounts} />
-              </TabsContent>
-              <TabsContent value="import">
-                <BankStatementImporter categories={categories} />
-              </TabsContent>
-           </Tabs>
+           <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 rounded-3xl overflow-hidden p-1 shadow-lg">
+               <Tabs defaultValue="manual" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 bg-zinc-950/50 p-1 rounded-2xl h-9 mb-1">
+                    <TabsTrigger value="manual" className="rounded-xl text-[10px] font-bold uppercase tracking-wide data-[state=active]:bg-zinc-800 data-[state=active]:text-white">Manual</TabsTrigger>
+                    <TabsTrigger value="import" className="rounded-xl text-[10px] font-bold uppercase tracking-wide data-[state=active]:bg-zinc-800 data-[state=active]:text-white">Importar</TabsTrigger>
+                  </TabsList>
+                  
+                  <div className="p-1">
+                    <TabsContent value="manual" className="mt-0">
+                        <TransactionForm categories={categories} accounts={bankAccounts} />
+                    </TabsContent>
+                    <TabsContent value="import" className="mt-0">
+                        <BankStatementImporter categories={categories} />
+                    </TabsContent>
+                  </div>
+               </Tabs>
+           </Card>
+
            <CreditCardWidget transactions={widgetData} />
         </div>
       </div>

@@ -11,7 +11,7 @@ import {
   Settings, 
   LogOut,
   User,
-  CalendarClock // Ícone para Gastos Fixos
+  Repeat
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -34,31 +34,33 @@ export function Sidebar({ user, className, onLinkClick }: SidebarProps) {
   const links = [
     { href: "/", label: "Visão Geral", icon: LayoutDashboard },
     { href: "/transactions", label: "Transações", icon: ArrowRightLeft },
-    // Item restaurado:
-    { href: "/fixed-expenses", label: "Gastos Fixos", icon: CalendarClock }, 
-    { href: "/budget", label: "Orçamento", icon: Wallet },
+    { href: "/recurring", label: "Gastos Fixos", icon: Repeat }, 
+    // { href: "/budget", label: "Orçamento", icon: Wallet }, 
     { href: "/settings", label: "Configurações", icon: Settings },
   ]
 
+  // Ajustado para w-[260px] para combinar com o layout
   return (
-    <aside className={cn("w-[280px] border-r border-white/5 bg-zinc-950/50 backdrop-blur-xl flex flex-col h-full", className)}>
+    <aside className={cn("w-[260px] border-r border-white/5 bg-zinc-950/50 backdrop-blur-2xl flex flex-col h-full transition-all duration-300", className)}>
       
-      {/* HEADER DA SIDEBAR COM LOGO */}
-      <div className="flex h-20 items-center justify-center px-6 border-b border-white/5 shrink-0">
-        <div className="relative w-36 h-20">
+      {/* HEADER: Mais baixo (h-20) e logo menor */}
+      <div className="flex h-20 items-center px-6 shrink-0 border-b border-white/5 bg-white/[0.01]">
+        <div className="relative w-28 h-10 transition-opacity hover:opacity-80">
             <Image 
                 src="/mesh.png" 
                 alt="Mesh Logo" 
                 fill 
-                className="object-contain"
+                className="object-contain object-left"
                 priority
                 unoptimized 
             />
         </div>
       </div>
 
-      {/* NAVEGAÇÃO */}
-      <div className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+      {/* NAVEGAÇÃO: Padding lateral menor (px-3) */}
+      <div className="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
+        <p className="px-3 text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">Menu</p>
+        
         {links.map((link) => {
           const Icon = link.icon
           const isActive = pathname === link.href
@@ -69,48 +71,52 @@ export function Sidebar({ user, className, onLinkClick }: SidebarProps) {
               href={link.href}
               onClick={onLinkClick}
               className={cn(
-                "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 group relative overflow-hidden",
+                // Altura reduzida (py-2.5) e fonte menor (text-[13px]) para visual compacto
+                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200 group relative",
                 isActive 
-                  ? "text-white bg-primary/10" 
-                  : "text-zinc-400 hover:text-zinc-100 hover:bg-white/5"
+                  ? "bg-white text-zinc-950 shadow-sm shadow-white/5 font-semibold" 
+                  : "text-zinc-400 hover:text-white hover:bg-white/5"
               )}
             >
-              {isActive && (
-                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
-              )}
-              <Icon size={20} className={cn(isActive ? "text-primary" : "text-zinc-500 group-hover:text-zinc-300")} />
+              <Icon 
+                size={18} // Ícone levemente menor visualmente
+                className={cn(
+                    "transition-colors shrink-0",
+                    isActive ? "text-zinc-950" : "text-zinc-500 group-hover:text-white"
+                )} 
+              />
               {link.label}
             </Link>
           )
         })}
       </div>
 
-      {/* FOOTER / PERFIL */}
-      <div className="p-4 border-t border-white/5 bg-zinc-900/20 shrink-0">
-        <div className="flex items-center gap-3 mb-4 px-2">
-          <Avatar className="h-10 w-10 border border-white/10">
+      {/* FOOTER: Mais compacto */}
+      <div className="p-3 border-t border-white/5 bg-black/20 shrink-0">
+        <div className="flex items-center gap-3 mb-2 p-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group">
+          <Avatar className="h-8 w-8 border border-white/10">
             <AvatarImage src={user.image || ""} />
-            <AvatarFallback className="bg-zinc-800 text-zinc-400">
-                <User size={18} />
+            <AvatarFallback className="bg-zinc-800 text-zinc-400 text-[10px]">
+                <User size={12} />
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 overflow-hidden">
-            <p className="truncate text-sm font-medium text-white">
+            <p className="truncate text-xs font-medium text-white group-hover:text-emerald-400 transition-colors">
               {user.name || "Usuário"}
             </p>
-            <p className="truncate text-xs text-zinc-500">
+            <p className="truncate text-[10px] text-zinc-500 font-mono">
               {user.email}
             </p>
           </div>
         </div>
         
         <Button 
-          variant="outline" 
-          className="w-full justify-start gap-2 border-white/5 bg-white/5 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 text-zinc-400 transition-all"
+          variant="ghost" 
+          className="w-full justify-start gap-2 h-9 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors rounded-lg px-2"
           onClick={() => signOut()}
         >
-          <LogOut size={16} />
-          Sair da Conta
+          <LogOut size={14} />
+          <span className="text-[11px] font-medium uppercase tracking-wide">Sair</span>
         </Button>
       </div>
     </aside>

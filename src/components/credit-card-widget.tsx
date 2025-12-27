@@ -1,18 +1,15 @@
 'use client'
 
 import { useState, useTransition, useMemo } from "react"
-import { CreditCard, Calendar, Receipt, ChevronRight, CheckCircle2, Loader2 } from "lucide-react"
+import { CreditCard, Calendar, CheckCircle2, Loader2, ChevronDown } from "lucide-react"
 import { createTransaction } from "@/app/actions/transactions"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
-// --- INTERFACES (Blindagem técnica sem 'any') ---
+// --- INTERFACES ---
 
-/** * Representa a estrutura de um objeto Decimal do Prisma.
- * Usamos uma interface estrutural para evitar a importação da lib pesada no cliente.
- */
 interface DecimalLike {
   toNumber: () => number;
 }
@@ -41,14 +38,10 @@ interface Invoice {
   sortKey: number 
 }
 
-/** * Função utilitária para conversão segura de valores monetários.
- * Resolve a incompatibilidade entre o Decimal do servidor e o Number do cliente.
- */
 const safeNumber = (val: number | string | DecimalLike | unknown): number => {
   if (typeof val === 'number') return val;
   if (typeof val === 'string') return Number(val);
   
-  // Verificação de tipo segura para garantir que 'val' é um objeto DecimalLike
   if (
     val && 
     typeof val === 'object' && 
@@ -67,8 +60,8 @@ const formatCurrency = (val: number) =>
 export function CreditCardWidget({ transactions }: { transactions: TransactionInput[] }) {
   const [isPending, startTransition] = useTransition()
   const [paidInvoices, setPaidInvoices] = useState<string[]>([])
+  const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null)
 
-  // 1. Agrupamento de dados (Memoizado para performance no deploy)
   const invoices = useMemo(() => {
     const creditTrans = transactions.filter(t => t.paymentMethod === 'CREDIT_CARD');
 
@@ -106,8 +99,8 @@ export function CreditCardWidget({ transactions }: { transactions: TransactionIn
       .slice(0, 3);
   }, [transactions]);
 
-  // 2. Lógica de Pagamento (Data Atual)
-  const handlePayInvoice = (inv: Invoice) => {
+  const handlePayInvoice = (inv: Invoice, e: React.MouseEvent) => {
+    e.stopPropagation();
     if(!confirm(`Deseja realizar o pagamento da fatura de ${inv.monthLabel} no valor de ${formatCurrency(inv.total)}?`)) return;
 
     startTransition(async () => {
@@ -127,116 +120,112 @@ export function CreditCardWidget({ transactions }: { transactions: TransactionIn
     });
   }
 
-  return (
-    <Card className="bg-zinc-900/60 backdrop-blur-md border-white/5 shadow-xl relative overflow-hidden h-fit w-full">
-      
-      {/* Decoração Visual */}
-      <div className="absolute -top-20 -right-20 w-64 h-64 bg-rose-500/10 blur-[80px] rounded-full pointer-events-none" />
+  const toggleExpand = (id: string) => {
+      setExpandedInvoice(prev => prev === id ? null : id);
+  }
 
-      <CardHeader className="relative z-10 pb-2 pt-6 px-6">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold text-white flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-rose-500/10 text-rose-500 ring-1 ring-inset ring-rose-500/20 shadow-lg">
-              <CreditCard size={20} strokeWidth={2.5} />
-            </div>
-            <div>
-              <span className="block text-xs font-normal text-muted-foreground">Visão Geral</span>
-              Próximas Faturas
-            </div>
-          </CardTitle>
-          
-          {invoices.length > 0 && (
-            <Badge variant="secondary" className="bg-zinc-800/80 text-zinc-400 border-white/5 font-mono text-[10px]">
-              PRÓXIMOS 3 MESES
-            </Badge>
-          )}
-        </div>
+  if (invoices.length === 0) {
+      return (
+        <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 rounded-3xl overflow-hidden shadow-sm w-full h-fit">
+            <CardContent className="p-6 flex flex-col items-center justify-center gap-2 text-zinc-500">
+                <CheckCircle2 size={24} className="opacity-20" />
+                <p className="text-xs">Sem faturas pendentes.</p>
+            </CardContent>
+        </Card>
+      )
+  }
+
+  return (
+    <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 rounded-3xl overflow-hidden shadow-sm flex flex-col w-full h-fit transition-all">
+      
+      <CardHeader className="flex flex-row items-center justify-between py-4 px-6 border-b border-white/5 bg-zinc-950/20">
+        <CardTitle className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+           <CreditCard size={14} />
+           Faturas Futuras
+        </CardTitle>
       </CardHeader>
 
-      <CardContent className="relative z-10 pt-4 px-6 pb-6 space-y-4">
-        {invoices.length === 0 ? (
-           <div className="flex flex-col items-center justify-center py-10 text-muted-foreground space-y-3 border border-dashed border-white/5 rounded-2xl bg-zinc-950/30">
-             <div className="w-12 h-12 bg-zinc-900/80 rounded-full flex items-center justify-center border border-white/5 shadow-inner">
-                <Receipt size={20} className="opacity-30" />
-             </div>
-             <div className="text-center">
-               <p className="text-sm font-medium text-zinc-400">Tudo em dia</p>
-               <p className="text-[10px] text-zinc-600 mt-0.5 uppercase tracking-widest font-bold">Sem faturas pendentes</p>
-             </div>
-           </div>
-        ) : (
-          invoices.map((inv) => {
+      <CardContent className="p-0">
+          <div className="divide-y divide-white/5">
+          {invoices.map((inv) => {
             const isPaid = paidInvoices.includes(inv.id);
+            const isExpanded = expandedInvoice === inv.id;
 
             return (
-            <div key={inv.id} className={`group bg-zinc-950/50 border transition-all rounded-xl overflow-hidden ${isPaid ? 'border-emerald-500/30 opacity-60' : 'border-white/5 hover:border-white/10 shadow-md'}`}>
-              
-              <div className="p-4 flex items-center justify-between bg-gradient-to-r from-zinc-900/50 to-transparent border-b border-white/5">
+            <div 
+                key={inv.id} 
+                className={cn(
+                    "group transition-all duration-200",
+                    isPaid ? 'bg-emerald-500/5 opacity-60' : 'bg-transparent hover:bg-white/[0.02]'
+                )}
+            >
+              <div 
+                className="p-4 px-6 flex items-center justify-between cursor-pointer"
+                onClick={() => !isPaid && toggleExpand(inv.id)}
+              >
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg transition-colors ${isPaid ? 'bg-emerald-500/20 text-emerald-500' : 'bg-zinc-800/50 text-zinc-400 group-hover:text-zinc-200'}`}>
-                    {isPaid ? <CheckCircle2 size={16} /> : <Calendar size={16} />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-zinc-100 capitalize tracking-wide leading-none">
-                        {inv.monthLabel}
-                    </p>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mt-1">
-                        {isPaid ? 'LIQUIDADA' : 'VENCIMENTO'}
-                    </p>
-                  </div>
+                   <div className={cn(
+                       "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+                       isPaid ? 'bg-emerald-500/10 text-emerald-500' : 'bg-zinc-800 text-rose-500'
+                   )}>
+                      {isPaid ? <CheckCircle2 size={14} /> : <Calendar size={14} />}
+                   </div>
+                   
+                   <div>
+                      <p className="text-xs font-bold text-white capitalize leading-none">
+                         {inv.monthLabel}
+                      </p>
+                      <p className="text-[9px] text-zinc-500 font-medium mt-1 uppercase tracking-wide">
+                         {isPaid ? 'Paga' : 'Em aberto'}
+                      </p>
+                   </div>
                 </div>
-                
-                <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <span className={`block font-bold tabular-nums text-lg leading-none drop-shadow-sm ${isPaid ? 'text-emerald-400 line-through decoration-emerald-500/50' : 'text-rose-400 shadow-rose-500/10'}`}>
-                        {formatCurrency(inv.total)}
-                      </span>
-                    </div>
 
+                <div className="flex items-center gap-3">
+                    <p className={cn(
+                        "text-xs font-bold font-mono tracking-tight tabular-nums",
+                        isPaid ? 'text-emerald-400 line-through decoration-emerald-500/50' : 'text-zinc-200'
+                    )}>
+                        {formatCurrency(inv.total)}
+                    </p>
+                    
                     {!isPaid && (
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            disabled={isPending}
-                            onClick={() => handlePayInvoice(inv)}
-                            className="h-8 px-4 text-[10px] font-bold uppercase tracking-widest bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/40 transition-all active:scale-95"
-                        >
-                            {isPending ? <Loader2 size={12} className="animate-spin" /> : "PAGAR"}
-                        </Button>
+                        <ChevronDown 
+                            size={14} 
+                            className={cn("text-zinc-600 transition-transform duration-200", isExpanded && "rotate-180")} 
+                        />
                     )}
                 </div>
               </div>
 
-              {!isPaid && (
-                <>
-                  <div className="divide-y divide-white/5 max-h-48 overflow-y-auto custom-scrollbar">
-                      {inv.items.map(item => (
-                      <div key={item.id} className="p-3 pl-4 flex justify-between items-center text-sm hover:bg-white/[0.02] transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-rose-500/50 shadow-[0_0_5px_rgba(244,63,94,0.5)]" />
-                            <div className="flex flex-col">
-                                <span className="text-zinc-300 font-medium text-xs md:text-sm">{item.description}</span>
-                                <span className="text-[10px] text-zinc-600 font-mono font-bold uppercase tracking-tighter">
-                                {new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                                </span>
-                            </div>
-                          </div>
-                          <span className="text-zinc-400 tabular-nums text-xs font-mono tracking-tighter">
-                            {formatCurrency(item.amount)}
-                          </span>
-                      </div>
-                      ))}
+              {/* Detalhes Expansíveis */}
+              {isExpanded && !isPaid && (
+                <div className="bg-black/20 border-t border-white/5 animate-in slide-in-from-top-1 duration-200">
+                  {/* ALTERAÇÃO: Removido slice e adicionado max-h com scroll */}
+                  <div className="px-6 py-3 space-y-1.5 max-h-[300px] overflow-y-auto custom-scrollbar">
+                     {inv.items.map(item => (
+                         <div key={item.id} className="flex justify-between items-center text-[10px] text-zinc-400 hover:text-zinc-200 transition-colors">
+                            <span className="truncate max-w-[180px]">{item.description}</span>
+                            <span className="font-mono text-zinc-300">{formatCurrency(item.amount)}</span>
+                         </div>
+                     ))}
                   </div>
-                  {inv.items.length > 3 && (
-                      <div className="bg-zinc-900/30 p-1.5 flex justify-center border-t border-white/5">
-                          <ChevronRight size={12} className="text-zinc-600 rotate-90" />
-                      </div>
-                  )}
-                </>
+
+                  <div className="p-3 px-6 bg-zinc-950/30 border-t border-white/5 flex justify-end">
+                      <Button 
+                        size="sm" 
+                        disabled={isPending}
+                        onClick={(e) => handlePayInvoice(inv, e)}
+                        className="rounded-lg bg-white text-black hover:bg-zinc-200 font-bold text-[10px] h-7 px-4 shadow-sm"
+                      >
+                         {isPending ? <Loader2 size={10} className="animate-spin mr-1" /> : "Pagar Agora"}
+                      </Button>
+                  </div>
+                </div>
               )}
             </div>
-          )})
-        )}
+          )})}
+          </div>
       </CardContent>
     </Card>
   )

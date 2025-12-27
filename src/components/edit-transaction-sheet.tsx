@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { updateTransaction, deleteTransaction } from "@/app/actions/transactions"
-import { Trash2, CalendarIcon, Tag, CreditCard, AlignLeft, ArrowUpCircle, ArrowDownCircle, Wallet } from "lucide-react"
+import { Trash2, CalendarIcon, Tag, CreditCard, AlignLeft, ArrowUpCircle, ArrowDownCircle, Wallet, Loader2 } from "lucide-react"
 
-// Componentes Shadcn
 import {
   Sheet,
   SheetContent,
@@ -36,7 +35,6 @@ interface CategoryDTO {
   updatedAt: Date
 }
 
-// Interface para as contas
 interface AccountDTO {
   id: string
   name: string
@@ -60,10 +58,10 @@ interface EditSheetProps {
   accounts: AccountDTO[] 
 }
 
-// AQUI ESTÁ A CORREÇÃO: Adicionamos "accounts = []" para evitar crash se vier undefined
 export function EditTransactionSheet({ children, transaction, categories, accounts = [] }: EditSheetProps) {
   const [open, setOpen] = useState(false)
   const [isMounted, setIsMounted] = useState(false) 
+  const [isPending, setIsPending] = useState(false)
   
   // States
   const [amount, setAmount] = useState(transaction.amount)
@@ -75,8 +73,6 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
   const [categoryId, setCategoryId] = useState(transaction.categoryId || "general")
   const [paymentMethod, setPaymentMethod] = useState(transaction.paymentMethod)
   const [type, setType] = useState(transaction.type)
-  
-  // State da Carteira (Se for null, usa "none" para o Select funcionar visualmente)
   const [bankAccountId, setBankAccountId] = useState(transaction.bankAccountId || "none")
 
   useEffect(() => {
@@ -92,6 +88,7 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
   }
 
   const handleSave = async (formData: FormData) => {
+    setIsPending(true)
     formData.set('id', transaction.id)
     formData.set('amount', amount.toString())
     formData.set('description', description)
@@ -99,18 +96,20 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
     formData.set('categoryId', categoryId === "general" ? "" : categoryId)
     formData.set('paymentMethod', paymentMethod)
     formData.set('type', type)
-    // Envia o ID da conta (ou string vazia se for "none" para o backend setar null)
     formData.set('bankAccountId', bankAccountId === "none" ? "" : bankAccountId)
 
     await updateTransaction(formData)
+    setIsPending(false)
     setOpen(false)
   }
 
   const handleDelete = async () => {
     if (!confirm("Deseja realmente excluir esta transação?")) return
+    setIsPending(true)
     const formData = new FormData()
     formData.set('id', transaction.id)
     await deleteTransaction(formData)
+    setIsPending(false)
     setOpen(false)
   }
 
@@ -124,23 +123,25 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
           {children}
       </SheetTrigger>
       
-      <SheetContent className="w-full sm:max-w-md bg-zinc-950 border-l border-white/10 p-0 flex flex-col h-full">
-        <SheetHeader className="p-6 pb-2 border-b border-white/5">
-          <SheetTitle className="text-lg font-medium text-zinc-400">Detalhes da Transação</SheetTitle>
+      <SheetContent className="w-full sm:max-w-md bg-zinc-950/90 backdrop-blur-xl border-l border-white/5 p-0 flex flex-col h-full shadow-2xl">
+        <SheetHeader className="p-5 pb-2 border-b border-white/5 bg-transparent">
+          <SheetTitle className="text-base font-semibold text-white text-center">Editar Transação</SheetTitle>
         </SheetHeader>
 
-        <form action={handleSave} className="flex-1 overflow-y-auto">
-          <div className="p-6 space-y-8 pb-32">
-            {/* SEÇÃO DE VALOR */}
-            <div className="flex flex-col items-center gap-6">
-               <div className="flex p-1 bg-zinc-900 rounded-full border border-white/5 w-full max-w-[240px]">
+        <form action={handleSave} className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="p-5 space-y-6 pb-32">
+            
+            {/* SEÇÃO DE VALOR (Compacta) */}
+            <div className="flex flex-col items-center gap-4">
+               {/* Segmented Control iOS Style */}
+               <div className="flex p-1 bg-zinc-900/80 rounded-lg border border-white/5 w-full max-w-[220px]">
                   <button
                     type="button"
                     onClick={() => setType('INCOME')}
                     className={cn(
-                      "flex-1 flex items-center justify-center gap-2 py-1.5 px-4 rounded-full text-xs font-bold transition-all",
+                      "flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all",
                       type === 'INCOME' 
-                        ? "bg-emerald-500/20 text-emerald-400 shadow-sm" 
+                        ? "bg-emerald-500/20 text-emerald-400 shadow-sm border border-emerald-500/20" 
                         : "text-zinc-500 hover:text-zinc-300"
                     )}
                   >
@@ -150,9 +151,9 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
                     type="button"
                     onClick={() => setType('EXPENSE')}
                     className={cn(
-                      "flex-1 flex items-center justify-center gap-2 py-1.5 px-4 rounded-full text-xs font-bold transition-all",
+                      "flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all",
                       type === 'EXPENSE' 
-                        ? "bg-rose-500/20 text-rose-400 shadow-sm" 
+                        ? "bg-rose-500/20 text-rose-400 shadow-sm border border-rose-500/20" 
                         : "text-zinc-500 hover:text-zinc-300"
                     )}
                   >
@@ -160,65 +161,69 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
                   </button>
                </div>
 
-               <div className="relative w-full">
+               <div className="relative w-full text-center">
                   <Input 
                     type="text"
                     inputMode="numeric"
                     value={amountDisplay}
                     onChange={handleAmountChange}
                     className={cn(
-                      "h-20 text-5xl font-bold bg-transparent border-none text-center focus-visible:ring-0 p-0 tracking-tight placeholder:text-zinc-800",
-                      type === 'INCOME' ? "text-emerald-500" : "text-zinc-100" 
+                      "h-16 text-4xl font-bold bg-transparent border-none text-center focus-visible:ring-0 p-0 tracking-tight placeholder:text-zinc-800 selection:bg-white/20 tabular-nums",
+                      type === 'INCOME' ? "text-emerald-400" : "text-white" 
                     )}
                   />
-                  <p className="text-center text-xs text-zinc-500 font-medium uppercase tracking-widest mt-1">Valor da transação</p>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest -mt-1">Valor</p>
                </div>
             </div>
 
-            {/* CAMPOS */}
-            <div className="space-y-5 bg-zinc-900/30 p-5 rounded-2xl border border-white/5">
-                <div className="space-y-2">
-                   <Label className="text-xs text-zinc-500 ml-1">Descrição</Label>
-                   <div className="relative">
-                      <div className="absolute left-3 top-3 text-zinc-500">
+            {/* CONTAINER DE CAMPOS (Visual Grouped List) */}
+            <div className="bg-zinc-900/30 backdrop-blur-md rounded-2xl border border-white/5 overflow-hidden">
+                
+                {/* DESCRIÇÃO */}
+                <div className="p-3 border-b border-white/5">
+                   <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider pl-1">Descrição</Label>
+                   <div className="relative mt-1">
+                      <div className="absolute left-3 top-2.5 text-zinc-500">
                          <AlignLeft size={16} />
                       </div>
                       <Input 
                         name="description"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
-                        className="pl-10 bg-zinc-950/50 border-white/10 h-11 focus-visible:ring-offset-0 focus-visible:ring-zinc-800"
+                        className="pl-10 bg-transparent border-none h-10 text-sm focus-visible:ring-0 placeholder:text-zinc-700"
                       />
                    </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                       <Label className="text-xs text-zinc-500 ml-1">Data</Label>
-                       <div className="relative">
-                          <div className="absolute left-3 top-3 text-zinc-500">
+                <div className="grid grid-cols-2 divide-x divide-white/5 border-b border-white/5">
+                    {/* DATA */}
+                    <div className="p-3">
+                       <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider pl-1">Data</Label>
+                       <div className="relative mt-1">
+                          <div className="absolute left-3 top-2.5 text-zinc-500">
                              <CalendarIcon size={16} />
                           </div>
                           <Input 
                              type="date"
                              value={date}
                              onChange={(e) => setDate(e.target.value)}
-                             className="pl-10 bg-zinc-950/50 border-white/10 h-11 [color-scheme:dark]"
+                             className="pl-10 bg-transparent border-none h-10 text-xs [color-scheme:dark] cursor-pointer focus-visible:ring-0"
                           />
                        </div>
                     </div>
 
-                    <div className="space-y-2">
-                       <Label className="text-xs text-zinc-500 ml-1">Categoria</Label>
-                       <div className="relative">
-                          <div className="absolute left-3 top-3 text-zinc-500 z-10">
+                    {/* CATEGORIA */}
+                    <div className="p-3">
+                       <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider pl-1">Categoria</Label>
+                       <div className="relative mt-1">
+                          <div className="absolute left-3 top-2.5 text-zinc-500 z-10">
                              <Tag size={16} />
                           </div>
                           <Select value={categoryId} onValueChange={setCategoryId}>
-                            <SelectTrigger className="pl-10 bg-zinc-950/50 border-white/10 h-11">
+                            <SelectTrigger className="pl-10 bg-transparent border-none h-10 text-xs focus:ring-0 shadow-none">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-zinc-900 border-white/10">
                               <SelectItem value="general">Geral</SelectItem>
                               {categories.map(c => (
                                 <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -229,20 +234,19 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
                     </div>
                 </div>
 
-                {/* CAMPO DE CARTEIRA (Safe map) */}
-                <div className="space-y-2">
-                    <Label className="text-xs text-zinc-500 ml-1">Carteira / Banco</Label>
-                    <div className="relative">
-                        <div className="absolute left-3 top-3 text-zinc-500 z-10">
+                {/* CARTEIRA */}
+                <div className="p-3 border-b border-white/5">
+                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider pl-1">Carteira</Label>
+                    <div className="relative mt-1">
+                        <div className="absolute left-3 top-2.5 text-zinc-500 z-10">
                             <Wallet size={16} />
                         </div>
                         <Select value={bankAccountId} onValueChange={setBankAccountId}>
-                            <SelectTrigger className="pl-10 bg-zinc-950/50 border-white/10 h-11">
+                            <SelectTrigger className="pl-10 bg-transparent border-none h-10 text-xs focus:ring-0 shadow-none">
                                 <SelectValue placeholder="Selecione uma carteira" />
                             </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="none">Nenhuma (Sem vínculo)</SelectItem>
-                                {/* O erro ocorria aqui quando accounts era undefined */}
+                            <SelectContent className="bg-zinc-900 border-white/10">
+                                <SelectItem value="none">Nenhuma</SelectItem>
                                 {accounts.map(acc => (
                                     <SelectItem key={acc.id} value={acc.id}>
                                         {acc.name}
@@ -253,17 +257,18 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
                     </div>
                 </div>
 
-                <div className="space-y-2">
-                   <Label className="text-xs text-zinc-500 ml-1">Forma de Pagamento</Label>
-                   <div className="relative">
-                      <div className="absolute left-3 top-3 text-zinc-500 z-10">
+                {/* PAGAMENTO */}
+                <div className="p-3">
+                   <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider pl-1">Pagamento</Label>
+                   <div className="relative mt-1">
+                      <div className="absolute left-3 top-2.5 text-zinc-500 z-10">
                          <CreditCard size={16} />
                       </div>
                       <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                        <SelectTrigger className="pl-10 bg-zinc-950/50 border-white/10 h-11">
+                        <SelectTrigger className="pl-10 bg-transparent border-none h-10 text-xs focus:ring-0 shadow-none">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="bg-zinc-900 border-white/10">
                           <SelectItem value="PIX">Pix</SelectItem>
                           <SelectItem value="CREDIT_CARD">Cartão de Crédito</SelectItem>
                           <SelectItem value="DEBIT_CARD">Cartão de Débito</SelectItem>
@@ -275,16 +280,21 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
             </div>
           </div>
 
-          <SheetFooter className="absolute bottom-0 left-0 w-full p-6 border-t border-white/5 bg-zinc-950/80 backdrop-blur-sm flex flex-col sm:flex-row gap-3">
-              <Button type="submit" className="flex-1 bg-white hover:bg-zinc-200 text-black font-bold h-12 rounded-xl">
-                Salvar Alterações
+          <SheetFooter className="absolute bottom-0 left-0 w-full p-5 border-t border-white/5 bg-zinc-950/90 backdrop-blur-xl flex flex-col sm:flex-row gap-3 z-20">
+              <Button 
+                type="submit" 
+                disabled={isPending}
+                className="flex-1 bg-white hover:bg-zinc-200 text-black font-bold h-12 rounded-xl text-sm shadow-lg shadow-white/5 transition-transform active:scale-[0.98]"
+              >
+                {isPending ? <Loader2 className="animate-spin" /> : "Salvar"}
               </Button>
 
               <Button 
                 type="button" 
+                disabled={isPending}
                 onClick={handleDelete}
                 variant="outline" 
-                className="w-full sm:w-auto border-red-900/30 text-red-500 hover:bg-red-950/30 hover:text-red-400 hover:border-red-900/50 h-12 rounded-xl px-4"
+                className="w-full sm:w-auto h-12 w-12 border-red-500/20 bg-red-500/5 text-red-500 hover:bg-red-500/10 hover:border-red-500/30 rounded-xl p-0 flex items-center justify-center"
               >
                  <Trash2 size={18} />
               </Button>

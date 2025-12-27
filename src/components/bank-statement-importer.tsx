@@ -9,23 +9,23 @@ import {
   CheckCircle2, 
   X, 
   Loader2, 
-  Save,
   Check,
   Calendar,
-  CreditCard
+  CreditCard,
+  ArrowRight
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { cn } from "@/lib/utils"
 
 interface Category {
   id: string
   name: string
 }
 
-// Interface flexível para leitura
 interface ExcelRow {
   "Data"?: string;
   "Lançamento"?: string;
@@ -47,23 +47,33 @@ interface ParsedTransaction {
   selected: boolean
 }
 
+// Overlay de Carregamento (Dentro do Card)
 function LoadingOverlay({ progress, currentItem }: { progress: number, currentItem: string }) {
   return (
-    <div className="absolute inset-0 bg-zinc-950/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
-        <div className="w-full max-w-sm space-y-6 text-center">
-            <div className="relative w-20 h-20 mx-auto">
-                <div className="absolute inset-0 border-4 border-white/5 rounded-full"></div>
-                <div className="absolute inset-0 border-4 border-t-emerald-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+    <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-md z-50 flex flex-col items-center justify-center p-8 animate-in fade-in duration-300 rounded-3xl">
+        <div className="w-full max-w-[280px] space-y-6 text-center">
+            {/* Spinner Apple Style */}
+            <div className="relative w-14 h-14 mx-auto">
+                <div className="absolute inset-0 border-2 border-white/5 rounded-full"></div>
+                <div className="absolute inset-0 border-2 border-t-emerald-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
                 <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-emerald-500">{progress}%</div>
             </div>
-            <div className="space-y-2">
-                <h3 className="text-xl font-bold text-white tracking-tight">Importando Transações</h3>
-                <p className="text-sm text-zinc-400 h-6 truncate max-w-[250px] mx-auto bg-zinc-900/50 rounded px-2 py-0.5 border border-white/5 transition-all">{currentItem}</p>
+            
+            <div className="space-y-1">
+                <h3 className="text-base font-semibold text-white tracking-tight">Processando...</h3>
+                <div className="h-5 flex items-center justify-center">
+                    <span className="text-[10px] text-zinc-400 truncate max-w-[200px]">
+                        {currentItem}
+                    </span>
+                </div>
             </div>
-            <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden border border-white/5 shadow-inner">
-                <div className="h-full bg-emerald-500 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(16,185,129,0.5)]" style={{ width: `${progress}%` }} />
+            
+            <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
+                <div 
+                    className="h-full bg-emerald-500 transition-all duration-300 ease-out" 
+                    style={{ width: `${progress}%` }} 
+                />
             </div>
-            <p className="text-xs text-zinc-600">Por favor, aguarde...</p>
         </div>
     </div>
   )
@@ -97,7 +107,6 @@ export function BankStatementImporter({ categories }: { categories: Category[] }
     }
   }
 
-  // --- LÓGICA RÍGIDA ---
   const processExcelData = (rows: ExcelRow[]) => {
     const items: ParsedTransaction[] = [];
 
@@ -106,21 +115,12 @@ export function BankStatementImporter({ categories }: { categories: Category[] }
       const lancamento = (row['Lançamento'] || "").trim();   
       const detalhes = (row['Detalhes'] || "").trim();       
       const rawValue = row['Valor'];          
-      const tipoLancamento = (row['Tipo Lançamento'] || "").trim(); // Remove espaços extras
+      const tipoLancamento = (row['Tipo Lançamento'] || "").trim();
 
-      // 1. FILTRO DE TIPO: Se não for explicitamente Entrada ou Saída, IGNORA.
-      // Isso mata Saldo Anterior, Saldo do Dia, Linhas vazias, etc.
-      if (tipoLancamento !== "Entrada" && tipoLancamento !== "Saída") {
-        return;
-      }
-
-      // 2. Filtro de Data
+      if (tipoLancamento !== "Entrada" && tipoLancamento !== "Saída") return;
       if (!rawDate || rawDate.includes('00/00/0000')) return;
-
-      // 3. Filtro de Valor
       if (!rawValue) return;
 
-      // Tratamento
       const [day, month, year] = rawDate.split('/');
       const isoDate = `${year}-${month}-${day}`;
 
@@ -181,8 +181,7 @@ export function BankStatementImporter({ categories }: { categories: Category[] }
     if (total === 0) return;
     setIsProcessing(true);
     setProgress(0);
-    let successCount = 0;
-
+    
     for (let i = 0; i < total; i++) {
       const item = selectedItems[i];
       setCurrentProcessingItem(item.description);
@@ -196,12 +195,11 @@ export function BankStatementImporter({ categories }: { categories: Category[] }
 
       try {
         await createTransaction(formData);
-        successCount++;
       } catch (error) {
         console.error("Erro ao salvar:", item.description);
       }
       setProgress(Math.round(((i + 1) / total) * 100));
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 20));
     }
 
     setTimeout(() => {
@@ -216,102 +214,170 @@ export function BankStatementImporter({ categories }: { categories: Category[] }
     setParsedItems(prev => prev.map(item => item.id === id ? { ...item, selected: !item.selected } : item))
   }
 
+  // --- TELA DE SUCESSO ---
   if (step === "SUCCESS") {
       return (
-        <Card className="bg-zinc-900/80 backdrop-blur-md border-white/5 shadow-2xl h-full flex flex-col items-center justify-center min-h-[400px]">
-            <div className="flex flex-col items-center gap-6 animate-in zoom-in-95 duration-500">
-                <div className="w-24 h-24 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center border border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
-                    <Check size={48} strokeWidth={3} />
+        <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 shadow-xl h-full flex flex-col items-center justify-center min-h-[300px] rounded-3xl relative overflow-hidden">
+            <div className="absolute inset-0 bg-emerald-500/5 blur-[80px] pointer-events-none" />
+            
+            <div className="flex flex-col items-center gap-6 animate-in zoom-in-95 duration-500 z-10">
+                <div className="w-16 h-16 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center border border-emerald-500/20 shadow-lg">
+                    <Check size={32} strokeWidth={2.5} />
                 </div>
-                <div className="text-center space-y-2">
-                    <h2 className="text-2xl font-bold text-white">Importação Concluída!</h2>
-                    <p className="text-zinc-400">Transações salvas com sucesso.</p>
+                <div className="text-center space-y-1">
+                    <h2 className="text-xl font-bold text-white">Importação Concluída</h2>
+                    <p className="text-zinc-400 text-sm">Suas transações foram salvas.</p>
                 </div>
-                <Button onClick={() => setStep("UPLOAD")} className="mt-4 bg-zinc-100 text-zinc-900 hover:bg-white font-bold px-8 h-12 rounded-xl">Importar Novo Arquivo</Button>
+                <Button onClick={() => setStep("UPLOAD")} className="mt-2 bg-white text-black hover:bg-zinc-200 font-semibold px-6 h-10 rounded-xl text-sm shadow-md">
+                    Importar Novo Arquivo
+                </Button>
             </div>
         </Card>
       )
   }
 
+  // --- TELA DE UPLOAD ---
   if (step === "UPLOAD") {
     return (
-      <Card className="bg-zinc-900/80 backdrop-blur-md border-white/5 shadow-2xl h-full relative overflow-hidden">
+      <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 shadow-xl h-full relative overflow-hidden rounded-3xl">
         {isProcessing && (
-           <div className="absolute inset-0 bg-zinc-950/60 z-50 flex flex-col items-center justify-center backdrop-blur-sm gap-3">
-             <Loader2 className="animate-spin text-emerald-500" size={40}/>
-             <p className="text-sm font-medium text-white">Lendo Arquivo...</p>
+           <div className="absolute inset-0 bg-zinc-950/80 z-50 flex flex-col items-center justify-center backdrop-blur-sm gap-3">
+             <Loader2 className="animate-spin text-emerald-500" size={32}/>
+             <p className="text-sm font-medium text-white animate-pulse">Processando arquivo...</p>
            </div>
         )}
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <Upload size={20} className="text-emerald-500" />
-            Importar Extrato (Excel/XLSX)
+        <CardHeader className="border-b border-white/5 py-4 px-6">
+          <CardTitle className="flex items-center gap-2 text-white text-sm font-medium uppercase tracking-wider">
+            <div className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-500">
+               <Upload size={16} />
+            </div>
+            Importar Extrato
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6 flex flex-col items-center justify-center min-h-[300px]">
-          <div className="w-full h-48 border-2 border-dashed border-white/10 rounded-xl bg-white/5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/10 hover:border-emerald-500/50 transition-all group" onClick={() => fileInputRef.current?.click()}>
-            <div className="p-4 bg-zinc-900 rounded-full mb-3 group-hover:scale-110 transition-transform shadow-lg">
-               <FileSpreadsheet size={32} className="text-zinc-400 group-hover:text-emerald-500 transition-colors" />
+        <CardContent className="flex flex-col items-center justify-center h-[300px] p-6">
+          
+          <div 
+            className="w-full h-full border border-dashed border-white/10 rounded-2xl bg-black/20 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 hover:border-white/20 transition-all group relative overflow-hidden" 
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {/* Ícone menor e mais elegante */}
+            <div className="p-4 bg-zinc-900/80 rounded-2xl mb-3 group-hover:scale-105 transition-transform shadow-lg border border-white/5">
+               <FileSpreadsheet size={24} className="text-zinc-400 group-hover:text-emerald-400 transition-colors" />
             </div>
-            <p className="text-sm font-medium text-zinc-300 group-hover:text-white">Clique para selecionar o arquivo</p>
-            <p className="text-xs text-zinc-500 mt-1">Suporta arquivos .xlsx ou .csv</p>
+            
+            <div className="text-center space-y-1">
+                <p className="text-sm font-medium text-zinc-300 group-hover:text-white transition-colors">Selecionar arquivo</p>
+                {/* Texto genérico sem citar bancos */}
+                <p className="text-[10px] text-zinc-500">Suporta arquivos .xlsx ou .csv</p>
+            </div>
           </div>
+          
           <input type="file" ref={fileInputRef} accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
         </CardContent>
       </Card>
     )
   }
 
+  // --- TELA DE PREVIEW ---
   return (
-    <Card className="bg-zinc-900/80 backdrop-blur-md border-white/5 shadow-2xl w-full relative overflow-hidden">
+    <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 shadow-xl w-full relative overflow-hidden rounded-3xl flex flex-col h-full max-h-[600px]">
+      
       {isProcessing && <LoadingOverlay progress={progress} currentItem={currentProcessingItem} />}
-      <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-white/5">
-        <CardTitle className="flex items-center gap-2 text-white">
-          <CheckCircle2 size={20} className="text-emerald-500" />
-          Conferir Importação ({parsedItems.filter(i => i.selected).length})
-        </CardTitle>
-        <Button variant="ghost" size="sm" onClick={() => setStep("UPLOAD")} disabled={isProcessing} className="text-zinc-400 hover:text-white"><X size={16} className="mr-2" /> Cancelar</Button>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="grid grid-cols-12 gap-4 px-4 py-2 bg-white/[0.02] text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-           <div className="col-span-1 text-center">Imp.</div>
-           <div className="col-span-2">Data</div>
-           <div className="col-span-5">Descrição</div>
-           <div className="col-span-4 text-right">Valor</div>
+      
+      <CardHeader className="flex flex-row items-center justify-between py-4 px-5 border-b border-white/5 bg-zinc-950/20">
+        <div className="flex items-center gap-3">
+           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/10">
+              <CheckCircle2 size={16} />
+           </div>
+           <div>
+              <CardTitle className="text-sm font-bold text-white">Conferir Dados</CardTitle>
+              <p className="text-[10px] text-zinc-400">
+                 {parsedItems.filter(i => i.selected).length} itens
+              </p>
+           </div>
         </div>
-        <div className="max-h-[500px] overflow-y-auto custom-scrollbar p-2 space-y-1">
+        <Button variant="ghost" size="sm" onClick={() => setStep("UPLOAD")} disabled={isProcessing} className="text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg h-8 text-xs">
+            <X size={14} className="mr-1.5" /> Cancelar
+        </Button>
+      </CardHeader>
+
+      <CardContent className="p-0 flex-1 overflow-hidden flex flex-col">
+        {/* Header da Lista - Compacto */}
+        <div className="grid grid-cols-12 gap-3 px-5 py-2 bg-white/[0.02] border-b border-white/5 text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+           <div className="col-span-1 text-center">#</div>
+           <div className="col-span-3">Data</div>
+           <div className="col-span-5">Descrição</div>
+           <div className="col-span-3 text-right">Valor</div>
+        </div>
+
+        {/* Lista Scrollável */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
           {parsedItems.length === 0 ? (
-            <div className="text-center py-10 space-y-2"><p className="text-zinc-400 font-medium">Nenhuma transação válida encontrada.</p></div>
+            <div className="flex flex-col items-center justify-center h-full text-zinc-500 gap-2">
+                <FileSpreadsheet size={24} className="opacity-20" />
+                <p className="text-xs">Nenhum dado encontrado.</p>
+            </div>
           ) : (
             parsedItems.map((item) => (
-                <div key={item.id} className={`grid grid-cols-12 gap-4 p-3 rounded-lg border items-center transition-all hover:bg-white/[0.02] ${item.selected ? "bg-zinc-950/60 border-white/5" : "bg-zinc-950/20 border-transparent opacity-40 grayscale"}`}>
+                <div 
+                    key={item.id} 
+                    className={cn(
+                        "grid grid-cols-12 gap-3 p-2.5 rounded-xl items-center transition-all cursor-pointer border border-transparent",
+                        item.selected 
+                            ? "bg-zinc-900/40 hover:bg-white/5" 
+                            : "opacity-40 grayscale hover:opacity-60"
+                    )}
+                    onClick={() => toggleSelect(item.id)}
+                >
                   <div className="col-span-1 flex justify-center">
-                      <Checkbox checked={item.selected} onCheckedChange={() => toggleSelect(item.id)} className="border-white/20 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500" />
+                      <Checkbox 
+                        checked={item.selected} 
+                        onCheckedChange={() => toggleSelect(item.id)} 
+                        className="border-white/20 w-4 h-4 rounded data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500 data-[state=checked]:text-black" 
+                      />
                   </div>
-                  <div className="col-span-2 flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5 text-zinc-300 font-mono text-xs">
-                         <Calendar size={10} className="text-zinc-600" />
-                         {new Date(item.date).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}
+                  
+                  <div className="col-span-3 flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5 text-zinc-300 font-medium text-[11px]">
+                          <Calendar size={10} className="text-zinc-600" />
+                          {new Date(item.date).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}
                       </div>
-                      <Badge variant="outline" className={`text-[9px] px-1 py-0 h-4 border-0 w-fit ${item.type === 'INCOME' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>{item.type === 'INCOME' ? 'Entrada' : 'Saída'}</Badge>
+                      <Badge variant="outline" className={`text-[9px] px-1 py-0 h-4 border-0 w-fit rounded ${item.type === 'INCOME' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                          {item.type === 'INCOME' ? 'Entrada' : 'Saída'}
+                      </Badge>
                   </div>
-                  <div className="col-span-5 min-w-0">
-                      <p className="text-xs font-medium text-zinc-200 truncate" title={item.description}>{item.description}</p>
-                      <div className="flex items-center gap-1.5 mt-1">
-                         <CreditCard size={10} className="text-zinc-600" />
-                         <span className="text-[10px] text-zinc-500 uppercase">{item.paymentMethod.replace('_', ' ')}</span>
+                  
+                  <div className="col-span-5 min-w-0 pr-2">
+                      <p className="text-xs font-medium text-zinc-300 truncate" title={item.description}>{item.description}</p>
+                      <div className="flex items-center gap-1 mt-0.5">
+                          <CreditCard size={9} className="text-zinc-600" />
+                          <span className="text-[9px] text-zinc-500 uppercase tracking-wide">{item.paymentMethod.replace('_', ' ')}</span>
                       </div>
                   </div>
-                  <div className="col-span-4 text-right">
-                      <span className={`font-mono text-sm font-bold tabular-nums ${item.type === 'INCOME' ? 'text-emerald-400' : 'text-rose-400'}`}>{item.type === 'INCOME' ? '+' : '-'} {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.amount)}</span>
+                  
+                  <div className="col-span-3 text-right">
+                      <span className={`font-mono text-xs font-bold tracking-tight ${item.type === 'INCOME' ? 'text-emerald-400' : 'text-zinc-300'}`}>
+                          {item.type === 'INCOME' ? '+' : '-'} {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.amount)}
+                      </span>
                   </div>
                 </div>
             ))
           )}
         </div>
-        <div className="p-4 border-t border-white/5 flex justify-between items-center bg-zinc-950/30">
-           <div className="text-xs text-zinc-500"><span className="text-white font-bold">{parsedItems.filter(i => i.selected).length}</span> transações selecionadas</div>
-           <Button onClick={handleSaveSelected} disabled={isProcessing || parsedItems.filter(i => i.selected).length === 0} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 shadow-lg shadow-emerald-900/20"><Save className="mr-2" size={18} /> Confirmar Importação</Button>
+
+        {/* Footer Actions */}
+        <div className="p-4 border-t border-white/5 flex justify-between items-center bg-zinc-950/30 backdrop-blur-md z-10">
+           <div className="text-[10px] text-zinc-500 font-medium uppercase tracking-wide">
+                <span className="text-white font-bold text-sm mr-1">{parsedItems.filter(i => i.selected).length}</span> selecionados
+           </div>
+           
+           <Button 
+                onClick={handleSaveSelected} 
+                disabled={isProcessing || parsedItems.filter(i => i.selected).length === 0} 
+                className="bg-white text-black hover:bg-zinc-200 font-bold px-5 h-9 rounded-xl shadow-lg shadow-white/5 text-xs transition-transform active:scale-95"
+            >
+               Confirmar <ArrowRight className="ml-1.5" size={14} />
+           </Button>
         </div>
       </CardContent>
     </Card>
