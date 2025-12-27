@@ -14,56 +14,72 @@ export default function Error({
   reset: () => void
 }) {
   useEffect(() => {
-    // Aqui você poderia enviar o erro para um serviço de log (Sentry, etc)
+    // Log do erro
     console.error("ERRO CRÍTICO CAPTURADO:", error)
   }, [error])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-6">
-      {/* Fundo Gradiente para manter identidade */}
-      <div className="fixed inset-0 w-full h-full pointer-events-none -z-50">
-          <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full bg-red-500/5 blur-[120px]" />
+    <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-6 overflow-hidden relative">
+      
+      {/* Background (Luzes de Alerta) */}
+      <div className="absolute inset-0 w-full h-full pointer-events-none -z-10">
+          <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-rose-500/10 blur-[120px]" />
+          <div className="absolute bottom-[-20%] right-[-10%] w-[400px] h-[400px] rounded-full bg-orange-500/5 blur-[100px]" />
       </div>
 
-      <Card className="max-w-md w-full bg-zinc-900/50 backdrop-blur-xl border-red-900/20 shadow-2xl">
+      <Card className="max-w-sm w-full bg-zinc-900/40 backdrop-blur-2xl border border-white/5 shadow-2xl rounded-3xl overflow-hidden">
         <CardContent className="flex flex-col items-center text-center p-8 space-y-6">
           
-          <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center border border-red-500/20 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
-            <AlertTriangle size={40} className="text-red-500" />
+          {/* Ícone Estilo App */}
+          <div className="w-16 h-16 bg-gradient-to-br from-rose-500/20 to-orange-500/20 rounded-2xl flex items-center justify-center border border-rose-500/10 shadow-inner">
+            <AlertTriangle size={28} className="text-rose-500" />
           </div>
 
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold text-white">Ops! Algo deu errado.</h2>
-            <p className="text-zinc-400 text-sm">
-              Encontramos um problema ao processar sua solicitação. Pode ser uma falha de conexão ou no banco de dados.
+            <h2 className="text-lg font-bold text-white tracking-tight">Algo deu errado</h2>
+            <p className="text-xs text-zinc-400 leading-relaxed max-w-[260px] mx-auto">
+              Não foi possível carregar as informações. Verifique sua conexão ou tente novamente.
             </p>
-            {/* Em produção, evite mostrar error.message cru para o usuário, mas em dev ajuda */}
-            <div className="bg-black/30 p-3 rounded-lg border border-white/5 mt-4">
-               <code className="text-xs text-red-400 font-mono break-all">
-                 {error.message || "Erro desconhecido"}
-               </code>
+            
+            {/* Código do Erro (Compacto) */}
+            <div className="mt-4 p-3 bg-black/30 rounded-xl border border-white/5 text-left overflow-hidden">
+                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Detalhes do Sistema</p>
+                <code className="text-[10px] text-rose-300/80 font-mono break-all line-clamp-3">
+                  {error.message || "Unknown Error"}
+                </code>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 w-full pt-2">
+          <div className="flex flex-col gap-2 w-full pt-2">
             <Button 
               onClick={reset} 
-              className="flex-1 bg-white text-black hover:bg-zinc-200"
+              className="w-full bg-white text-black hover:bg-zinc-200 h-10 rounded-xl font-bold text-xs shadow-lg shadow-white/5 transition-transform active:scale-[0.98]"
             >
-              <RefreshCcw size={16} className="mr-2" />
+              <RefreshCcw size={14} className="mr-2" />
               Tentar Novamente
             </Button>
             
-            <Button variant="outline" className="flex-1 border-white/10 hover:bg-white/5" asChild>
+            <Button 
+                variant="ghost" 
+                className="w-full h-10 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 text-xs font-medium" 
+                asChild
+            >
               <Link href="/">
-                 <Home size={16} className="mr-2" />
-                 Início
+                 <Home size={14} className="mr-2" />
+                 Voltar ao Início
               </Link>
             </Button>
           </div>
 
         </CardContent>
       </Card>
+      
+      {/* Footer Fixo */}
+      <div className="absolute bottom-8 text-center w-full">
+         <p className="text-[10px] text-zinc-700 uppercase tracking-widest font-semibold opacity-60">
+           Mesh System Error Handler
+         </p>
+      </div>
     </div>
   )
 }
