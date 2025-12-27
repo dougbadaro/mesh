@@ -47,7 +47,7 @@ export function Sidebar({ user, className, onLinkClick }: SidebarProps) {
       
       {/* HEADER: Mais baixo (h-20) e logo menor */}
       <div className="flex h-20 items-center px-6 shrink-0 border-b border-white/5 bg-white/[0.01]">
-        <div className="relative w-28 h-10 transition-opacity hover:opacity-80">
+        <div className="relative w-28 h-20 transition-opacity hover:opacity-80">
             <Image 
                 src="/mesh.png" 
                 alt="Mesh Logo" 
