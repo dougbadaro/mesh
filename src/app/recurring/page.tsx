@@ -12,7 +12,7 @@ import { getAuthenticatedUser } from "@/lib/auth-check"
 export default async function RecurringPage() {
   const user = await getAuthenticatedUser()
 
-  // 1. Busca de Recorrências (Incluindo dados visuais da Carteira)
+  // 1. Busca de Recorrências
   const recurringsRaw = await prisma.recurringTransaction.findMany({
     where: { userId: user.id, active: true },
     include: { 
@@ -27,7 +27,7 @@ export default async function RecurringPage() {
     where: { OR: [{ userId: user.id }, { userId: null }] }
   })
 
-  // 3. Busca de Carteiras (Para passar para os Selects de edição/criação)
+  // 3. Busca de Carteiras
   const bankAccounts = await prisma.bankAccount.findMany({
     where: { userId: user.id },
     select: { id: true, name: true, color: true }
@@ -54,82 +54,82 @@ export default async function RecurringPage() {
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
 
   return (
-    <div className="max-w-5xl mx-auto p-6 md:p-10 pb-20 animate-in fade-in duration-700 space-y-8">
+    <div className="max-w-5xl mx-auto p-4 md:p-6 pb-24 animate-in fade-in duration-700 space-y-6">
       
-      {/* HEADER E NAVEGAÇÃO */}
+      {/* HEADER E NAVEGAÇÃO - Compacto */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-            <Button variant="outline" size="icon" asChild className="h-10 w-10 rounded-xl border-white/10 bg-zinc-900/50 hover:bg-white/5">
+        <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" asChild className="h-9 w-9 rounded-xl hover:bg-white/5 text-zinc-400">
                 <Link href="/">
-                    <ArrowLeft size={18} className="text-zinc-400" />
+                    <ArrowLeft size={18} />
                 </Link>
             </Button>
             <div>
-                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+                <h1 className="text-xl font-bold text-white flex items-center gap-2 tracking-tight">
                     Gastos Fixos
                 </h1>
-                <p className="text-sm text-zinc-400">Assinaturas e contas recorrentes</p>
+                <p className="text-xs text-zinc-400">Assinaturas e contas recorrentes</p>
             </div>
         </div>
 
-        {/* Passamos accounts aqui também, caso atualize o CreateRecurringSheet futuramente */}
         <CreateRecurringSheet categories={categories} accounts={bankAccounts}>
-            <Button className="bg-white text-black hover:bg-zinc-200 font-semibold gap-2 rounded-xl">
-                <Plus size={18} /> Novo Gasto Fixo
+            <Button className="bg-white text-black hover:bg-zinc-200 font-bold h-9 text-xs px-4 gap-2 rounded-xl shadow-lg shadow-white/5 transition-transform active:scale-95">
+                <Plus size={14} /> Novo Gasto Fixo
             </Button>
         </CreateRecurringSheet>
       </div>
 
-      {/* KPI */}
+      {/* KPI - Glassmorphism & Compact */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="bg-zinc-900/40 border-white/5 backdrop-blur-sm">
-              <CardContent className="p-6 flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-full bg-rose-500/10 flex items-center justify-center border border-rose-500/20 text-rose-500">
-                      <Wallet size={24} />
+          <Card className="bg-zinc-900/40 border-white/5 backdrop-blur-xl rounded-3xl shadow-sm overflow-hidden">
+              <CardContent className="p-5 flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-xl bg-rose-500/10 flex items-center justify-center border border-rose-500/10 text-rose-500">
+                      <Wallet size={18} />
                   </div>
                   <div>
-                      <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Custo Mensal Fixo</p>
-                      <h2 className="text-3xl font-bold text-white mt-1">{formatCurrency(totalMonthly)}</h2>
+                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Custo Mensal</p>
+                      <h2 className="text-2xl font-bold text-white mt-0.5 tracking-tight">{formatCurrency(totalMonthly)}</h2>
                   </div>
               </CardContent>
           </Card>
 
-          <Card className="bg-zinc-900/40 border-white/5 backdrop-blur-sm">
-              <CardContent className="p-6 flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20 text-blue-500">
-                      <CalendarClock size={24} />
+          <Card className="bg-zinc-900/40 border-white/5 backdrop-blur-xl rounded-3xl shadow-sm overflow-hidden">
+              <CardContent className="p-5 flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/10 text-blue-500">
+                      <CalendarClock size={18} />
                   </div>
                   <div>
-                      <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Total de Itens</p>
-                      <h2 className="text-3xl font-bold text-white mt-1">{recurrings.length} <span className="text-sm font-normal text-zinc-500">assinaturas</span></h2>
+                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Total de Itens</p>
+                      <h2 className="text-2xl font-bold text-white mt-0.5 tracking-tight">{recurrings.length} <span className="text-xs font-medium text-zinc-500">assinaturas</span></h2>
                   </div>
               </CardContent>
           </Card>
       </div>
 
       {/* LISTA */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-medium text-zinc-400 uppercase tracking-wider ml-1">Suas Assinaturas</h3>
+      <div className="space-y-3">
+        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-2">Suas Assinaturas</h3>
         
         {recurrings.length === 0 ? (
-          <Card className="border-dashed border-white/10 bg-white/[0.02]">
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-                <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center border border-white/5 shadow-inner">
-                   <Receipt size={32} className="text-zinc-600" />
+          <Card className="border-dashed border-white/10 bg-white/[0.01] rounded-3xl">
+              <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-3">
+                <div className="w-12 h-12 bg-zinc-900/50 rounded-2xl flex items-center justify-center border border-white/5">
+                   <Receipt size={24} className="text-zinc-600" />
                 </div>
                 <div className="space-y-1">
-                   <h3 className="text-lg font-medium text-white">Nenhum gasto fixo</h3>
-                   <p className="text-sm text-zinc-500 max-w-xs">Adicione contas como Aluguel ou Internet para controlar seu orçamento mensal.</p>
+                   <h3 className="text-sm font-medium text-white">Nenhum gasto fixo</h3>
+                   <p className="text-xs text-zinc-500 max-w-[200px] mx-auto">Adicione contas como Aluguel ou Internet para previsão automática.</p>
                 </div>
               </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-2">
             {recurrings.map(rec => (
               <RecurringItem 
                 key={rec.id} 
                 data={rec} 
-                accounts={bankAccounts} // Passa as contas para o modo edição
+                accounts={bankAccounts}
+                categories={categories} // Passando categorias para permitir edição completa
               />
             ))}
           </div>

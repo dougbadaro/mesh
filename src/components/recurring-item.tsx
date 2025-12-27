@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { editRecurring, stopRecurring } from "@/app/actions/recurring"
-import { Pencil, Trash2, X, Check, CalendarClock, CreditCard, Wallet } from "lucide-react"
+import { Pencil, Trash2, X, Check, CalendarClock, CreditCard, Wallet, Tag } from "lucide-react"
 
 // Componentes Shadcn UI
 import { Button } from "@/components/ui/button"
@@ -16,8 +16,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
 
-// Interface para as contas
+// --- INTERFACES ---
+
+interface Category {
+  id: string
+  name: string
+}
+
 interface Account {
   id: string
   name: string
@@ -30,13 +37,19 @@ interface RecurringData {
   amount: number | string | { toNumber: () => number } 
   paymentMethod: string
   startDate: Date
+  categoryId?: string | null // Adicionado ID da categoria
   category: { name: string } | null
-  bankAccountId?: string | null // NOVO: Campo da carteira
-  bankAccount?: { name: string; color: string | null } | null // Para exibir dados da carteira
+  bankAccountId?: string | null 
+  bankAccount?: { name: string; color: string | null } | null 
 }
 
-// Recebe as contas como prop
-export function RecurringItem({ data, accounts }: { data: RecurringData, accounts: Account[] }) {
+interface RecurringItemProps {
+  data: RecurringData
+  accounts: Account[]
+  categories: Category[] // <--- Adicionado aqui para corrigir o erro
+}
+
+export function RecurringItem({ data, accounts, categories }: RecurringItemProps) {
   const [isEditing, setIsEditing] = useState(false)
   
   const safeAmount = (val: number | string | { toNumber: () => number }) => {
@@ -53,6 +66,7 @@ export function RecurringItem({ data, accounts }: { data: RecurringData, account
   const [description, setDescription] = useState(data.description)
   const [dateValue, setDateValue] = useState(new Date(data.startDate).toISOString().split('T')[0])
   const [bankAccountId, setBankAccountId] = useState(data.bankAccountId || "none")
+  const [categoryId, setCategoryId] = useState(data.categoryId || "general") // State para categoria
 
   const [amountDisplay, setAmountDisplay] = useState(
     new Intl.NumberFormat('pt-BR', {
@@ -78,51 +92,70 @@ export function RecurringItem({ data, accounts }: { data: RecurringData, account
     setDescription(data.description)
     setDateValue(new Date(data.startDate).toISOString().split('T')[0])
     setBankAccountId(data.bankAccountId || "none")
+    setCategoryId(data.categoryId || "general")
   }
 
   return (
-    <Card className="bg-zinc-900/40 border-white/5 hover:border-white/10 transition-all group overflow-visible">
-      <CardContent className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <Card className={cn(
+        "bg-zinc-900/40 border-white/5 transition-all group overflow-visible",
+        isEditing ? "ring-1 ring-emerald-500/20 bg-zinc-900/60" : "hover:bg-white/[0.02]"
+    )}>
+      <CardContent className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         
         {/* LADO ESQUERDO */}
-        <div className="flex items-center gap-5 flex-1">
-          <div className="w-12 h-12 rounded-2xl bg-zinc-800/50 border border-white/5 flex items-center justify-center text-zinc-400 group-hover:text-primary group-hover:border-primary/20 transition-colors">
-             <CalendarClock size={22} strokeWidth={1.5} />
+        <div className="flex items-center gap-4 flex-1">
+          <div className="h-10 w-10 rounded-xl bg-zinc-800/50 border border-white/5 flex items-center justify-center text-zinc-400 group-hover:text-emerald-400 group-hover:border-emerald-500/20 transition-all shrink-0">
+             <CalendarClock size={18} strokeWidth={1.5} />
           </div>
           
-          <div className="flex-1 space-y-1.5">
+          <div className="flex-1 space-y-1 min-w-0">
             {isEditing ? (
-              <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
+              <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
                 {/* Inputs de Edição */}
-                <Input 
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="h-9 bg-zinc-950/50 border-white/10 text-sm w-full max-w-[250px] focus-visible:ring-primary/30"
-                  placeholder="Nome da despesa"
-                  autoFocus
-                />
-                
-                <div className="flex flex-wrap gap-2">
-                   <div className="flex items-center gap-2 bg-zinc-950/30 p-1 rounded-md border border-white/5">
-                      <span className="text-[10px] text-muted-foreground pl-2 whitespace-nowrap">Início:</span>
-                      <Input 
-                        type="date"
-                        value={dateValue}
-                        onChange={(e) => setDateValue(e.target.value)}
-                        className="h-7 bg-transparent border-none text-xs w-auto [color-scheme:dark] cursor-pointer focus-visible:ring-0 shadow-none p-0"
-                      />
-                   </div>
-
-                   {/* SELECT DE CARTEIRA (NOVO) */}
-                   <Select value={bankAccountId} onValueChange={setBankAccountId}>
-                      <SelectTrigger className="h-9 bg-zinc-950/50 border-white/10 text-xs w-[180px]">
-                        <div className="flex items-center gap-2">
-                           <Wallet size={12} className="text-muted-foreground" />
-                           <SelectValue placeholder="Sem Carteira" />
+                <div className="flex gap-2 w-full">
+                    <Input 
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      className="h-8 bg-black/20 border-white/10 text-sm w-full max-w-[200px] focus-visible:ring-emerald-500/30"
+                      placeholder="Nome da despesa"
+                      autoFocus
+                    />
+                    
+                    {/* SELECT DE CATEGORIA (NOVO) */}
+                    <Select value={categoryId} onValueChange={setCategoryId}>
+                      <SelectTrigger className="h-8 bg-black/20 border-white/10 text-[10px] w-[110px] px-2">
+                        <div className="flex items-center gap-1.5 truncate">
+                           <Tag size={10} className="text-zinc-500" />
+                           <SelectValue placeholder="Categoria" />
                         </div>
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Nenhuma (Sem vínculo)</SelectItem>
+                      <SelectContent className="bg-zinc-900 border-white/10">
+                        <SelectItem value="general">Geral</SelectItem>
+                        {categories.map(cat => (
+                           <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                   </Select>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-2">
+                   <Input 
+                     type="date"
+                     value={dateValue}
+                     onChange={(e) => setDateValue(e.target.value)}
+                     className="h-7 bg-black/20 border-white/10 text-[10px] w-auto px-2 [color-scheme:dark] cursor-pointer"
+                   />
+
+                   {/* SELECT DE CARTEIRA */}
+                   <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                      <SelectTrigger className="h-7 bg-black/20 border-white/10 text-[10px] w-[130px] px-2">
+                        <div className="flex items-center gap-1.5 truncate">
+                           <Wallet size={10} className="text-zinc-500" />
+                           <SelectValue placeholder="Carteira" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-white/10">
+                        <SelectItem value="none">Sem Carteira</SelectItem>
                         {accounts.map(acc => (
                            <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
                         ))}
@@ -132,34 +165,31 @@ export function RecurringItem({ data, accounts }: { data: RecurringData, account
               </div>
             ) : (
               <>
-                <h3 className="font-semibold text-zinc-100 text-base">{data.description}</h3>
+                <h3 className="font-medium text-zinc-200 text-sm truncate pr-4">{data.description}</h3>
                 
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  <Badge variant="secondary" className="bg-zinc-800/50 hover:bg-zinc-800 text-zinc-400 border-white/5 font-normal">
+                <div className="flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
+                  <span className="bg-white/5 px-1.5 py-0.5 rounded text-zinc-400 border border-white/5 flex items-center gap-1">
                     {data.category?.name || 'Geral'}
-                  </Badge>
+                  </span>
                   
-                  <div className="flex items-center gap-1.5" title="Forma de Pagamento">
-                      {data.paymentMethod === 'CREDIT_CARD' ? <CreditCard size={12} /> : <Wallet size={12} />}
-                      <span>{data.paymentMethod === 'CREDIT_CARD' ? 'Cartão' : 'Conta'}</span>
-                  </div>
+                  <span className="flex items-center gap-1">
+                      {data.paymentMethod === 'CREDIT_CARD' ? <CreditCard size={10} /> : <Wallet size={10} />}
+                      {data.paymentMethod === 'CREDIT_CARD' ? 'Cartão' : 'Conta'}
+                  </span>
 
-                  {/* Exibe Carteira Vinculada (Se existir) */}
                   {data.bankAccount && (
-                     <>
-                        <div className="w-1 h-1 rounded-full bg-zinc-700" />
-                        <div className="flex items-center gap-1.5" title="Carteira Vinculada">
-                           <div 
-                             className="w-1.5 h-1.5 rounded-full" 
-                             style={{ backgroundColor: data.bankAccount.color || '#10b981' }} 
-                           />
-                           <span>{data.bankAccount.name}</span>
-                        </div>
-                     </>
+                      <span className="flex items-center gap-1 border-l border-white/10 pl-2 ml-1" title="Carteira Vinculada">
+                         <div 
+                           className="w-1.5 h-1.5 rounded-full" 
+                           style={{ backgroundColor: data.bankAccount.color || '#10b981' }} 
+                         />
+                         {data.bankAccount.name}
+                      </span>
                   )}
                   
-                  <div className="w-1 h-1 rounded-full bg-zinc-700" />
-                  <span>Dia {new Date(data.startDate).getDate()}</span>
+                  <span className="flex items-center gap-1 border-l border-white/10 pl-2 ml-1">
+                     Dia {new Date(data.startDate).getDate()}
+                  </span>
                 </div>
               </>
             )}
@@ -167,54 +197,54 @@ export function RecurringItem({ data, accounts }: { data: RecurringData, account
         </div>
 
         {/* LADO DIREITO */}
-        <div className="flex items-center gap-6 justify-between md:justify-end border-t md:border-t-0 border-white/5 pt-4 md:pt-0">
+        <div className="flex items-center gap-4 justify-between md:justify-end border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
           <div className="text-right">
-            <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-0.5">Mensal</p>
+            <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider mb-0.5">Mensal</p>
             {isEditing ? (
                <Input 
                  type="text"
                  inputMode="numeric"
                  value={amountDisplay}
                  onChange={handleAmountChange}
-                 className="h-10 bg-zinc-950/50 border-white/10 font-bold w-36 text-right text-lg text-emerald-400 focus-visible:ring-emerald-500/30"
+                 className="h-8 bg-black/20 border-white/10 font-bold w-28 text-right text-sm text-emerald-400 focus-visible:ring-emerald-500/30"
                />
             ) : (
-              <p className="text-lg font-bold text-zinc-200 tabular-nums">
+              <p className="text-sm font-bold text-zinc-200 tabular-nums">
                 {amountDisplay}
               </p>
             )}
           </div>
 
-          <div className="flex gap-2 pl-2 md:border-l border-white/5">
+          <div className="flex gap-1 pl-2 md:border-l border-white/5">
             {isEditing ? (
               <>
-                <form action={editRecurring} className="flex gap-2">
+                <form action={editRecurring} className="flex gap-1">
                   <input type="hidden" name="id" value={data.id} />
                   <input type="hidden" name="amount" value={amountValue} />
                   <input type="hidden" name="description" value={description} />
                   <input type="hidden" name="startDate" value={dateValue} />
-                  {/* Envia a carteira nova */}
                   <input type="hidden" name="bankAccountId" value={bankAccountId === "none" ? "" : bankAccountId} />
+                  <input type="hidden" name="categoryId" value={categoryId === "general" ? "" : categoryId} />
                   
                   <Button 
                     type="submit" 
                     size="icon" 
-                    className="h-9 w-9 bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 transition-all" 
+                    className="h-8 w-8 bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 rounded-lg" 
                     onClick={() => setIsEditing(false)}
                     title="Salvar"
                   >
-                    <Check size={16} />
+                    <Check size={14} />
                   </Button>
                 </form>
                 
                 <Button 
                   size="icon" 
                   variant="ghost" 
-                  className="h-9 w-9 text-zinc-400 hover:text-white hover:bg-zinc-800" 
+                  className="h-8 w-8 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg" 
                   onClick={handleCancel}
                   title="Cancelar"
                 >
-                  <X size={16} />
+                  <X size={14} />
                 </Button>
               </>
             ) : (
@@ -222,11 +252,11 @@ export function RecurringItem({ data, accounts }: { data: RecurringData, account
                 <Button 
                   size="icon" 
                   variant="ghost" 
-                  className="h-9 w-9 text-zinc-500 hover:text-white hover:bg-zinc-800" 
+                  className="h-8 w-8 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg" 
                   onClick={() => setIsEditing(true)}
                   title="Editar"
                 >
-                  <Pencil size={16} />
+                  <Pencil size={14} />
                 </Button>
                 
                 <form action={stopRecurring}>
@@ -235,10 +265,10 @@ export function RecurringItem({ data, accounts }: { data: RecurringData, account
                     type="submit" 
                     size="icon" 
                     variant="ghost" 
-                    className="h-9 w-9 text-zinc-500 hover:text-red-400 hover:bg-red-500/10" 
+                    className="h-8 w-8 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg" 
                     title="Encerrar Assinatura"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={14} />
                   </Button>
                 </form>
               </>
