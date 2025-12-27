@@ -4,6 +4,8 @@ import { BudgetCard } from "./components/budget-card"
 import { Wallet, PiggyBank, AlertCircle } from "lucide-react"
 import { TransactionType } from "@prisma/client"
 
+import { Card, CardContent } from "@/components/ui/card"
+
 export default async function BudgetPage() {
   const user = await getAuthenticatedUser()
 
@@ -29,7 +31,7 @@ export default async function BudgetPage() {
     })
   ])
 
-  // 1. Processamento de Gastos (Map)
+  // 1. Processamento de Gastos
   const spendingMap = new Map<string, number>()
   let totalSpent = 0
 
@@ -41,7 +43,7 @@ export default async function BudgetPage() {
      totalSpent += Number(t.amount)
   })
 
-  // 2. Criação da Lista de Itens (Transformação Pura)
+  // 2. Criação da Lista de Itens
   const budgetItems = categories.map(cat => {
      const spent = spendingMap.get(cat.id) || 0
      const limit = cat.budgetLimit ? Number(cat.budgetLimit) : 0
@@ -56,8 +58,7 @@ export default async function BudgetPage() {
      }
   })
 
-  // 3. Cálculo do Total de Orçamento (Reduce)
-  // Somamos aqui fora para evitar o erro de reassign dentro do map
+  // 3. Cálculo do Total de Orçamento
   const totalBudget = budgetItems.reduce((acc, item) => {
       return acc + (item.category.limit || 0)
   }, 0)
@@ -67,9 +68,9 @@ export default async function BudgetPage() {
   const itemsWithoutBudget = budgetItems.filter(i => i.category.limit === null)
   
   itemsWithBudget.sort((a, b) => {
-     const pctA = (a.spent / (a.category.limit || 1))
-     const pctB = (b.spent / (b.category.limit || 1))
-     return pctB - pctA 
+      const pctA = (a.spent / (a.category.limit || 1))
+      const pctB = (b.spent / (b.category.limit || 1))
+      return pctB - pctA 
   })
 
   const available = totalBudget - totalSpent
@@ -77,60 +78,66 @@ export default async function BudgetPage() {
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
 
   return (
-    <div className="max-w-5xl mx-auto p-6 md:p-10 pb-20 animate-in fade-in duration-700 space-y-10">
+    <div className="max-w-6xl mx-auto p-4 md:p-6 pb-24 animate-in fade-in duration-700 space-y-8">
       
-      {/* HEADER */}
+      {/* HEADER - Compacto */}
       <div>
-        <h1 className="text-2xl font-bold text-white">Planejamento Mensal</h1>
-        <p className="text-sm text-zinc-400">Controle seus limites de gastos por categoria.</p>
+        <h1 className="text-xl font-bold text-white tracking-tight">Planejamento</h1>
+        <p className="text-xs text-zinc-400">Controle seus limites mensais por categoria.</p>
       </div>
 
-      {/* KPI CARDS */}
+      {/* KPI CARDS - Compactos e Glassmorphism */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-         <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-2xl flex flex-col justify-between h-32">
-            <div className="flex items-center gap-3 text-zinc-400">
-                <div className="p-2 bg-zinc-800 rounded-lg">
-                    <Wallet size={18} />
-                </div>
-                <span className="text-sm font-medium uppercase tracking-wide">Teto de Gastos</span>
-            </div>
-            <p className="text-3xl font-bold text-white">{formatCurrency(totalBudget)}</p>
-         </div>
+         <Card className="bg-zinc-900/40 border-white/5 backdrop-blur-xl rounded-3xl shadow-sm overflow-hidden">
+            <CardContent className="p-5 flex flex-col justify-between h-28">
+               <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400">
+                     <Wallet size={16} />
+                  </div>
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Teto de Gastos</span>
+               </div>
+               <p className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalBudget)}</p>
+            </CardContent>
+         </Card>
 
-         <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-2xl flex flex-col justify-between h-32">
-            <div className="flex items-center gap-3 text-zinc-400">
-                <div className="p-2 bg-zinc-800 rounded-lg">
-                    <AlertCircle size={18} />
-                </div>
-                <span className="text-sm font-medium uppercase tracking-wide">Já utilizado</span>
-            </div>
-            <p className="text-3xl font-bold text-white">{formatCurrency(totalSpent)}</p>
-         </div>
+         <Card className="bg-zinc-900/40 border-white/5 backdrop-blur-xl rounded-3xl shadow-sm overflow-hidden">
+            <CardContent className="p-5 flex flex-col justify-between h-28">
+               <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400">
+                     <AlertCircle size={16} />
+                  </div>
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Já utilizado</span>
+               </div>
+               <p className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalSpent)}</p>
+            </CardContent>
+         </Card>
 
-         <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-2xl flex flex-col justify-between h-32 relative overflow-hidden">
-            {available < 0 && <div className="absolute inset-0 bg-rose-500/10 animate-pulse" />}
-            
-            <div className="flex items-center gap-3 text-zinc-400 relative z-10">
-                <div className="p-2 bg-zinc-800 rounded-lg">
-                    <PiggyBank size={18} />
-                </div>
-                <span className="text-sm font-medium uppercase tracking-wide">Disponível</span>
-            </div>
-            <p className={`text-3xl font-bold relative z-10 ${available < 0 ? "text-rose-500" : "text-emerald-500"}`}>
-                {formatCurrency(available)}
-            </p>
-         </div>
+         <Card className="bg-zinc-900/40 border-white/5 backdrop-blur-xl rounded-3xl shadow-sm overflow-hidden relative">
+            {available < 0 && <div className="absolute inset-0 bg-rose-500/10 animate-pulse pointer-events-none" />}
+            <CardContent className="p-5 flex flex-col justify-between h-28 relative z-10">
+               <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400">
+                     <PiggyBank size={16} />
+                  </div>
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Disponível</span>
+               </div>
+               <p className={`text-2xl font-bold tracking-tight ${available < 0 ? "text-rose-500" : "text-emerald-500"}`}>
+                  {formatCurrency(available)}
+               </p>
+            </CardContent>
+         </Card>
       </div>
 
       {/* COM ORÇAMENTO */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-zinc-200">Meus Orçamentos</h2>
+      <div className="space-y-3">
+        <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-1">Meus Orçamentos</h2>
         {itemsWithBudget.length === 0 ? (
-            <div className="p-10 border border-dashed border-white/10 rounded-2xl text-center text-zinc-500 bg-zinc-900/20">
-                Você ainda não definiu limites. Clique nas categorias abaixo para começar.
+            <div className="p-8 border border-dashed border-white/10 rounded-3xl text-center flex flex-col items-center justify-center gap-2 bg-zinc-900/20">
+                <AlertCircle size={24} className="text-zinc-600 opacity-50" />
+                <p className="text-xs text-zinc-500">Defina limites nas categorias abaixo para começar.</p>
             </div>
         ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {itemsWithBudget.map(item => (
                     <BudgetCard 
                         key={item.category.id} 
@@ -144,9 +151,9 @@ export default async function BudgetPage() {
 
       {/* SEM ORÇAMENTO */}
       {itemsWithoutBudget.length > 0 && (
-        <div className="space-y-4 pt-6 border-t border-white/5">
-            <h2 className="text-lg font-semibold text-zinc-500">Outras Categorias</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="space-y-3 pt-6 border-t border-white/5">
+            <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-1">Sem Limite Definido</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {itemsWithoutBudget.map(item => (
                     <BudgetCard 
                         key={item.category.id} 

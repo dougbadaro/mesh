@@ -35,7 +35,7 @@ export function Sidebar({ user, className, onLinkClick }: SidebarProps) {
     { href: "/", label: "Visão Geral", icon: LayoutDashboard },
     { href: "/transactions", label: "Transações", icon: ArrowRightLeft },
     { href: "/recurring", label: "Gastos Fixos", icon: Repeat }, 
-    // { href: "/budget", label: "Orçamento", icon: Wallet }, 
+    { href: "/budget", label: "Orçamento", icon: Wallet }, 
     { href: "/settings", label: "Configurações", icon: Settings },
   ]
 
