@@ -49,6 +49,9 @@ interface TransactionProps {
   paymentMethod: string
   categoryId?: string | null
   bankAccountId?: string | null
+  // Adicione dueDate aqui para compatibilidade com o componente pai, mesmo que não editado
+  dueDate?: Date | null
+  category?: { name: string } | null
 }
 
 interface EditSheetProps {
@@ -286,7 +289,7 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
                 disabled={isPending}
                 className="flex-1 bg-white hover:bg-zinc-200 text-black font-bold h-12 rounded-xl text-sm shadow-lg shadow-white/5 transition-transform active:scale-[0.98]"
               >
-                {isPending ? <Loader2 className="animate-spin" /> : "Salvar"}
+                {isPending ? <Loader2 className="animate-spin" /> : "Salvar Alterações"}
               </Button>
 
               <Button 

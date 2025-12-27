@@ -1,16 +1,16 @@
 import Link from "next/link"
 import { getAuthenticatedUser } from "@/lib/auth-check"
 import { prisma } from "@/lib/prisma"
-import { TransactionItemRow } from "@/components/transaction-item-row" // <--- IMPORT NOVO
+import { TransactionItemRow } from "@/components/transaction-item-row" 
+import { PayInvoiceDialog } from "@/components/pay-invoice-dialog" 
+import { TransactionType } from "@prisma/client"
 import { 
   ArrowLeft, 
   ChevronLeft, 
   ChevronRight, 
-  CreditCard, 
   Calendar, 
   AlertCircle,
   ShoppingBag,
-  Wallet,
   CheckCircle2,
   ListFilter
 } from "lucide-react"
@@ -54,11 +54,11 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
 
   const invoiceDate = new Date(selectedYear, selectedMonth, 1)
   
-  // 3. Buscar Transações
+  // 3. Buscar Dados
   const startOfInvoice = new Date(selectedYear, selectedMonth, 1)
   const endOfInvoice = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59)
 
-  const [rawTransactions, rawCategories, accounts] = await Promise.all([
+  const [rawTransactions, rawCategories, rawAccounts, historyTransactions] = await Promise.all([
     prisma.transaction.findMany({
         where: {
             userId: user.id,
@@ -72,8 +72,33 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
         orderBy: { date: 'desc' }
     }),
     prisma.category.findMany({ where: { OR: [{ userId: user.id }, { userId: null }] } }),
-    prisma.bankAccount.findMany({ where: { userId: user.id }, select: { id: true, name: true } })
+    prisma.bankAccount.findMany({ 
+        where: { userId: user.id }, 
+        select: { id: true, name: true, initialBalance: true } 
+    }),
+    prisma.transaction.findMany({
+        where: { 
+            userId: user.id, 
+            paymentMethod: { not: 'CREDIT_CARD' } 
+        },
+        select: { bankAccountId: true, amount: true, type: true }
+    })
   ])
+
+  // --- CÁLCULO DE SALDOS ---
+  const accountsWithBalance = rawAccounts.map(acc => {
+      const accHistory = historyTransactions.filter(t => t.bankAccountId === acc.id)
+      const totalTransacted = accHistory.reduce((sum, t) => {
+          const val = Number(t.amount)
+          return t.type === TransactionType.INCOME ? sum + val : sum - val
+      }, 0)
+      
+      return {
+          ...acc,
+          initialBalance: Number(acc.initialBalance), 
+          currentBalance: Number(acc.initialBalance) + totalTransacted
+      }
+  })
 
   // --- SANITIZAÇÃO ---
   const categories = rawCategories.map(cat => ({
@@ -86,12 +111,12 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
     amount: Number(t.amount),
     category: t.category ? {
         ...t.category,
-        name: t.category.name, // Precisamos do nome explicitamente
+        name: t.category.name,
         budgetLimit: t.category.budgetLimit ? Number(t.category.budgetLimit) : null
     } : null
   }))
 
-  // 4. Cálculos
+  // 4. Cálculos da Fatura
   const invoiceTotal = transactions.reduce((acc, t) => acc + t.amount, 0)
   const isPast = new Date(selectedYear, selectedMonth, dueDay) < new Date(now.getFullYear(), now.getMonth(), now.getDate())
   
@@ -181,10 +206,16 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
                           <p className="text-sm text-zinc-300">{transactions.length} lançamentos</p>
                       </div>
                       <div className="h-10 w-px bg-white/10 hidden md:block" />
-                      <Button className="bg-white text-black hover:bg-zinc-200 font-bold h-10 rounded-xl shadow-lg shadow-white/5">
-                          <Wallet size={16} className="mr-2" />
-                          Pagar
-                      </Button>
+                      
+                      {/* --- CORREÇÃO AQUI --- */}
+                      {/* O 'key' força o componente a resetar quando o mês muda */}
+                      <PayInvoiceDialog 
+                        key={monthLabel}
+                        invoiceTotal={invoiceTotal}
+                        monthName={monthLabel}
+                        accounts={accountsWithBalance}
+                      />
+                      {/* --------------------- */}
                   </div>
               </div>
           </CardContent>
@@ -212,7 +243,7 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
                         key={t.id} 
                         transaction={t}
                         categories={categories}
-                        accounts={accounts}
+                        accounts={accountsWithBalance} 
                         isLast={index === transactions.length - 1}
                     />
                 ))}

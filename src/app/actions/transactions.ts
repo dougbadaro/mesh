@@ -13,7 +13,6 @@ const transactionSchema = z.object({
   type: z.nativeEnum(TransactionType),
   paymentMethod: z.nativeEnum(PaymentMethod),
   categoryId: z.string().optional().transform(val => val === "" ? undefined : val),
-  // NOVO: Recebe o ID da carteira (trata string vazia como null)
   bankAccountId: z.string().optional().transform(val => val === "" ? null : val), 
   installments: z.coerce.number().optional().default(0),
   isRecurring: z.string().optional(), 
@@ -27,7 +26,6 @@ const updateSchema = z.object({
   type: z.nativeEnum(TransactionType),
   paymentMethod: z.nativeEnum(PaymentMethod),
   categoryId: z.string().optional().transform(val => val === "" ? null : val), 
-  // NOVO: Permite atualizar a carteira
   bankAccountId: z.string().optional().transform(val => val === "" ? null : val), 
   date: z.string(),
 })
@@ -60,7 +58,7 @@ export async function createTransaction(formData: FormData) {
   const purchaseDate = new Date(data.date + "T12:00:00")
   const transactionsToCreate: Prisma.TransactionCreateManyInput[] = []
 
-  // Lógica de Recorrência
+  // 1. Recorrência
   if (data.isRecurring === 'true') {
     const recurring = await prisma.recurringTransaction.create({
       data: {
@@ -74,7 +72,6 @@ export async function createTransaction(formData: FormData) {
         active: true,
         frequency: 'MONTHLY',
         isFixed: true,
-        // (Opcional) Se você adicionou bankAccountId na tabela RecurringTransaction, adicione aqui também
       }
     })
 
@@ -95,7 +92,7 @@ export async function createTransaction(formData: FormData) {
         paymentMethod: data.paymentMethod,
         userId: userId,
         categoryId: data.categoryId ?? null,
-        bankAccountId: data.bankAccountId ?? null, // <--- VINCULA A CARTEIRA
+        bankAccountId: data.bankAccountId ?? null,
         date: visualDate,
         dueDate: dueDate,
         recurringId: recurring.id 
@@ -103,7 +100,7 @@ export async function createTransaction(formData: FormData) {
     }
   }
 
-  // Lógica de Cartão de Crédito
+  // 2. Cartão de Crédito
   else if (data.paymentMethod === 'CREDIT_CARD') {
     const startMonthOffset = purchaseDate.getDate() >= closingDay ? 1 : 0
     const installmentsCount = (data.installments && data.installments > 1) ? data.installments : 1
@@ -124,7 +121,7 @@ export async function createTransaction(formData: FormData) {
         paymentMethod: data.paymentMethod,
         userId: userId,
         categoryId: data.categoryId ?? null,
-        bankAccountId: data.bankAccountId ?? null, // <--- VINCULA A CARTEIRA (Mesmo sendo crédito, é bom saber a origem)
+        bankAccountId: data.bankAccountId ?? null,
         date: visualDate, 
         dueDate: dueDate,
         currentInstallment: installmentsCount > 1 ? i + 1 : null,
@@ -132,7 +129,7 @@ export async function createTransaction(formData: FormData) {
     }
   } 
 
-  // Outros Métodos (Débito, Pix, Cash)
+  // 3. Outros (Débito, Pix, Cash)
   else {
     transactionsToCreate.push({
       amount: data.amount,
@@ -141,7 +138,7 @@ export async function createTransaction(formData: FormData) {
       paymentMethod: data.paymentMethod,
       userId: userId,
       categoryId: data.categoryId ?? null,
-      bankAccountId: data.bankAccountId ?? null, // <--- VINCULA A CARTEIRA (Essencial para o saldo)
+      bankAccountId: data.bankAccountId ?? null,
       date: purchaseDate,
       dueDate: purchaseDate,
     })
@@ -151,41 +148,42 @@ export async function createTransaction(formData: FormData) {
     await prisma.transaction.createMany({ data: transactionsToCreate })
   }
 
-  // Atualiza também a página de settings, pois o saldo da carteira mudou
+  // REVALIDAÇÃO COMPLETA
   revalidatePath('/')
+  revalidatePath('/transactions') // Novo
+  revalidatePath('/credit-card')  // Novo
   revalidatePath('/recurring')
   revalidatePath('/settings') 
 }
 
-// --- UPDATE TRANSACTION (PROTEGIDA) ---
+// --- UPDATE TRANSACTION ---
 export async function updateTransaction(formData: FormData) {
   const userId = await getValidatedUser()
 
   const userSettings = await prisma.user.findUnique({
     where: { id: userId },
-    select: { creditCardClosingDay: true, creditCardDueDay: true }
+    select: { creditCardDueDay: true } // Não precisamos mais do closingDay aqui
   })
 
-  const closingDay = userSettings?.creditCardClosingDay ?? 6
   const dueDay = userSettings?.creditCardDueDay ?? 10
 
   const result = updateSchema.safeParse(Object.fromEntries(formData.entries()))
   if (!result.success) throw new Error("Invalid Data")
 
   const data = result.data
-  const purchaseDate = new Date(data.date + "T12:00:00")
+  const purchaseDate = new Date(data.date + "T12:00:00") // Data que veio do form (Visual)
   
   const visualDate = new Date(purchaseDate)
   const dueDate = new Date(purchaseDate)
 
+  // REMOVIDO: Lógica de offset (fechamento) que causava o bug de pular meses
+  // Assumimos que a data escolhida no form já é a data desejada de exibição
   if (data.paymentMethod === 'CREDIT_CARD') {
-    const offset = purchaseDate.getDate() >= closingDay ? 1 : 0
-    visualDate.setMonth(purchaseDate.getMonth() + offset)
-    dueDate.setMonth(purchaseDate.getMonth() + offset)
+    // Apenas garantimos que a Data de Vencimento bata com o dia configurado
+    // mantendo o mês/ano da data visual
     dueDate.setDate(dueDay)
   }
 
-  // SEGURANÇA: userId no WHERE garante que só edita se for o dono
   await prisma.transaction.update({
     where: { 
       id: data.id,
@@ -197,25 +195,26 @@ export async function updateTransaction(formData: FormData) {
       date: visualDate, 
       dueDate: dueDate,
       categoryId: data.categoryId, 
-      bankAccountId: data.bankAccountId, // <--- ATUALIZA A CARTEIRA
+      bankAccountId: data.bankAccountId,
       type: data.type,
       paymentMethod: data.paymentMethod
     }
   })
 
+  // REVALIDAÇÃO COMPLETA
   revalidatePath('/')
+  revalidatePath('/transactions') // Novo
+  revalidatePath('/credit-card')  // Novo
   revalidatePath('/recurring')
-  revalidatePath('/settings')
 }
 
-// --- DELETE TRANSACTION (PROTEGIDA) ---
+// --- DELETE TRANSACTION ---
 export async function deleteTransaction(formData: FormData) {
   const userId = await getValidatedUser()
   const id = formData.get('id') as string
 
   if (!id) return
 
-  // SEGURANÇA: userId no WHERE impede que deletem dados de terceiros
   try {
     await prisma.transaction.delete({ 
       where: { 
@@ -228,7 +227,9 @@ export async function deleteTransaction(formData: FormData) {
     throw new Error("Failed to delete or unauthorized")
   }
 
+  // REVALIDAÇÃO COMPLETA
   revalidatePath('/')
+  revalidatePath('/transactions') // Novo
+  revalidatePath('/credit-card')  // Novo
   revalidatePath('/recurring')
-  revalidatePath('/settings')
 }

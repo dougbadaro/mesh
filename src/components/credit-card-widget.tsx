@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useTransition, useMemo } from "react"
-import { CreditCard, Calendar, CheckCircle2, Loader2, ChevronDown } from "lucide-react"
-import { createTransaction } from "@/app/actions/transactions"
+import { useState, useMemo } from "react"
+import { CreditCard, Calendar, CheckCircle2, ChevronDown } from "lucide-react"
+import { PayInvoiceDialog } from "@/components/pay-invoice-dialog"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 // --- INTERFACES ---
@@ -38,6 +37,13 @@ interface Invoice {
   sortKey: number 
 }
 
+// Interface para as contas (necessário para o modal)
+interface Account {
+    id: string;
+    name: string;
+    currentBalance: number;
+}
+
 const safeNumber = (val: number | string | DecimalLike | unknown): number => {
   if (typeof val === 'number') return val;
   if (typeof val === 'string') return Number(val);
@@ -57,9 +63,13 @@ const safeNumber = (val: number | string | DecimalLike | unknown): number => {
 const formatCurrency = (val: number) => 
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
-export function CreditCardWidget({ transactions }: { transactions: TransactionInput[] }) {
-  const [isPending, startTransition] = useTransition()
-  const [paidInvoices, setPaidInvoices] = useState<string[]>([])
+export function CreditCardWidget({ 
+    transactions, 
+    accounts = [] // Recebe as contas da Dashboard
+}: { 
+    transactions: TransactionInput[], 
+    accounts?: Account[] 
+}) {
   const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null)
 
   const invoices = useMemo(() => {
@@ -99,27 +109,6 @@ export function CreditCardWidget({ transactions }: { transactions: TransactionIn
       .slice(0, 3);
   }, [transactions]);
 
-  const handlePayInvoice = (inv: Invoice, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if(!confirm(`Deseja realizar o pagamento da fatura de ${inv.monthLabel} no valor de ${formatCurrency(inv.total)}?`)) return;
-
-    startTransition(async () => {
-        const formData = new FormData();
-        formData.append('description', `Pagamento Fatura ${inv.monthLabel}`);
-        formData.append('amount', inv.total.toFixed(2));
-        formData.append('type', 'EXPENSE');
-        formData.append('paymentMethod', 'PIX'); 
-        formData.append('date', new Date().toISOString().split('T')[0]);
-
-        try {
-            await createTransaction(formData);
-            setPaidInvoices(prev => [...prev, inv.id]);
-        } catch (error) {
-            console.error("Erro ao processar pagamento:", error);
-        }
-    });
-  }
-
   const toggleExpand = (id: string) => {
       setExpandedInvoice(prev => prev === id ? null : id);
   }
@@ -148,27 +137,20 @@ export function CreditCardWidget({ transactions }: { transactions: TransactionIn
       <CardContent className="p-0">
           <div className="divide-y divide-white/5">
           {invoices.map((inv) => {
-            const isPaid = paidInvoices.includes(inv.id);
             const isExpanded = expandedInvoice === inv.id;
 
             return (
             <div 
                 key={inv.id} 
-                className={cn(
-                    "group transition-all duration-200",
-                    isPaid ? 'bg-emerald-500/5 opacity-60' : 'bg-transparent hover:bg-white/[0.02]'
-                )}
+                className="group transition-all duration-200 bg-transparent hover:bg-white/[0.02]"
             >
               <div 
                 className="p-4 px-6 flex items-center justify-between cursor-pointer"
-                onClick={() => !isPaid && toggleExpand(inv.id)}
+                onClick={() => toggleExpand(inv.id)}
               >
                 <div className="flex items-center gap-3">
-                   <div className={cn(
-                       "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
-                       isPaid ? 'bg-emerald-500/10 text-emerald-500' : 'bg-zinc-800 text-rose-500'
-                   )}>
-                      {isPaid ? <CheckCircle2 size={14} /> : <Calendar size={14} />}
+                   <div className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-zinc-800 text-rose-500">
+                      <Calendar size={14} />
                    </div>
                    
                    <div>
@@ -176,50 +158,42 @@ export function CreditCardWidget({ transactions }: { transactions: TransactionIn
                          {inv.monthLabel}
                       </p>
                       <p className="text-[9px] text-zinc-500 font-medium mt-1 uppercase tracking-wide">
-                         {isPaid ? 'Paga' : 'Em aberto'}
+                         {inv.items.length} itens
                       </p>
                    </div>
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <p className={cn(
-                        "text-xs font-bold font-mono tracking-tight tabular-nums",
-                        isPaid ? 'text-emerald-400 line-through decoration-emerald-500/50' : 'text-zinc-200'
-                    )}>
+                    <p className="text-xs font-bold font-mono tracking-tight tabular-nums text-zinc-200">
                         {formatCurrency(inv.total)}
                     </p>
                     
-                    {!isPaid && (
-                        <ChevronDown 
-                            size={14} 
-                            className={cn("text-zinc-600 transition-transform duration-200", isExpanded && "rotate-180")} 
-                        />
-                    )}
+                    <ChevronDown 
+                        size={14} 
+                        className={cn("text-zinc-600 transition-transform duration-200", isExpanded && "rotate-180")} 
+                    />
                 </div>
               </div>
 
               {/* Detalhes Expansíveis */}
-              {isExpanded && !isPaid && (
+              {isExpanded && (
                 <div className="bg-black/20 border-t border-white/5 animate-in slide-in-from-top-1 duration-200">
-                  {/* ALTERAÇÃO: Removido slice e adicionado max-h com scroll */}
-                  <div className="px-6 py-3 space-y-1.5 max-h-[300px] overflow-y-auto custom-scrollbar">
-                     {inv.items.map(item => (
-                         <div key={item.id} className="flex justify-between items-center text-[10px] text-zinc-400 hover:text-zinc-200 transition-colors">
-                            <span className="truncate max-w-[180px]">{item.description}</span>
-                            <span className="font-mono text-zinc-300">{formatCurrency(item.amount)}</span>
-                         </div>
-                     ))}
+                  <div className="px-6 py-3 space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar">
+                      {inv.items.map(item => (
+                          <div key={item.id} className="flex justify-between items-center text-[10px] text-zinc-400 hover:text-zinc-200 transition-colors">
+                             <span className="truncate max-w-[180px]">{item.description}</span>
+                             <span className="font-mono text-zinc-300">{formatCurrency(item.amount)}</span>
+                          </div>
+                      ))}
                   </div>
 
                   <div className="p-3 px-6 bg-zinc-950/30 border-t border-white/5 flex justify-end">
-                      <Button 
-                        size="sm" 
-                        disabled={isPending}
-                        onClick={(e) => handlePayInvoice(inv, e)}
-                        className="rounded-lg bg-white text-black hover:bg-zinc-200 font-bold text-[10px] h-7 px-4 shadow-sm"
-                      >
-                         {isPending ? <Loader2 size={10} className="animate-spin mr-1" /> : "Pagar Agora"}
-                      </Button>
+                      <PayInvoiceDialog 
+                        key={inv.monthLabel} // Reseta o modal ao mudar a fatura
+                        invoiceTotal={inv.total}
+                        monthName={inv.monthLabel}
+                        accounts={accounts} 
+                      />
                   </div>
                 </div>
               )}

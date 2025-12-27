@@ -5,11 +5,9 @@ import {
   ArrowUpRight, 
   ArrowDownLeft, 
   Wallet,
-  CreditCard as CreditCardIcon,
+  Activity,
   Receipt,
-  Pencil,
-  TrendingUp,
-  Activity
+  TrendingUp
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,15 +17,15 @@ import { MonthSelector } from "@/components/month-selector";
 import { EditTransactionSheet } from "@/components/edit-transaction-sheet";
 import { TransactionForm } from "@/components/transaction-form";
 import { BankStatementImporter } from "@/components/bank-statement-importer";
-import { CreditCardWidget } from "@/components/credit-card-widget";
 import { BankAccountsWidget } from "@/components/bank-accounts-widget";
+import { PayInvoiceDialog } from "@/components/pay-invoice-dialog";
+import { CreditCardWidget } from "@/components/credit-card-widget";
 
 interface DashboardProps {
   searchParams: Promise<{ month?: string; year?: string }>
 }
 
 export default async function Dashboard(props: DashboardProps) {
-  // 1. SEGURANÇA E PARAMS
   const user = await getAuthenticatedUser();
   const userId = user.id;
 
@@ -39,6 +37,8 @@ export default async function Dashboard(props: DashboardProps) {
 
   const startOfMonth = new Date(selectedYear, selectedMonth, 1);
   const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999); 
+  
+  const monthName = startOfMonth.toLocaleString('pt-BR', { month: 'long' });
   
   const isPastMonth = endOfMonth < now;
 
@@ -103,7 +103,7 @@ export default async function Dashboard(props: DashboardProps) {
     })
   ]);
 
-  // 4. SANITIZAÇÃO
+  // 4. SANITIZAÇÃO (Crucial para evitar erros de Decimal no client)
   const categories = rawCategories.map(cat => ({
     ...cat,
     budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null
@@ -137,7 +137,7 @@ export default async function Dashboard(props: DashboardProps) {
           }
       }
 
-      // Atualiza saldo geral (se não for conta oculta)
+      // Atualiza saldo geral
       const isVisible = !t.bankAccountId || !hiddenAccountIds.includes(t.bankAccountId);
       if (isVisible) {
           if (tDate < startTime) {
@@ -155,7 +155,15 @@ export default async function Dashboard(props: DashboardProps) {
   // 6. PREPARAÇÃO DE DADOS VISUAIS
   const listItemsNonCredit = monthlyTransactions
     .filter(t => t.paymentMethod !== 'CREDIT_CARD')
-    .map(t => ({ ...t, amount: Number(t.amount) }));
+    .map(t => ({ 
+        ...t, 
+        amount: Number(t.amount),
+        // CORREÇÃO DECIMAL: Recriamos o objeto category sanitizado
+        category: t.category ? {
+            ...t.category,
+            budgetLimit: t.category.budgetLimit ? Number(t.category.budgetLimit) : null
+        } : null
+    }));
 
   const listItemsCredit = monthlyTransactions.filter(t => t.paymentMethod === 'CREDIT_CARD');
   const monthlyInvoiceTotal = listItemsCredit.reduce((acc, t) => acc + Number(t.amount), 0);
@@ -186,18 +194,17 @@ export default async function Dashboard(props: DashboardProps) {
     paymentMethod: t.paymentMethod
   }));
 
-  const formatDate = (date: Date) => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(date));
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-700">
+    <div className="space-y-6 animate-in fade-in duration-700 pb-20 md:pb-0">
       
-      {/* HEADER PAGE - Clean e Pequeno */}
+      {/* HEADER PAGE */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white">Visão Geral</h1>
           <p className="text-xs text-zinc-400 mt-0.5">
-             Resumo financeiro de {startOfMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}.
+              Resumo financeiro de {startOfMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}.
           </p>
         </div>
         <MonthSelector />
@@ -208,7 +215,7 @@ export default async function Dashboard(props: DashboardProps) {
         {/* COLUNA ESQUERDA (Principal) */}
         <div className="xl:col-span-8 space-y-6">
           
-          {/* CARDS DE KPI (Compactos) */}
+          {/* CARDS DE KPI */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             {/* CARD SALDO */}
@@ -232,8 +239,8 @@ export default async function Dashboard(props: DashboardProps) {
                  <div className="grid grid-cols-2 gap-3">
                     <div className="bg-white/5 border border-white/5 p-2.5 rounded-xl">
                       <div className="flex items-center gap-1.5 mb-0.5">
-                         <div className="p-0.5 rounded-full bg-emerald-500/20 text-emerald-400"><ArrowUpRight size={10} /></div>
-                         <span className="text-[9px] text-zinc-400 uppercase font-bold">Entradas</span>
+                          <div className="p-0.5 rounded-full bg-emerald-500/20 text-emerald-400"><ArrowUpRight size={10} /></div>
+                          <span className="text-[9px] text-zinc-400 uppercase font-bold">Entradas</span>
                       </div>
                       <p className="text-sm font-semibold text-emerald-400 leading-none">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: "compact" }).format(monthIncome)}
@@ -241,8 +248,8 @@ export default async function Dashboard(props: DashboardProps) {
                     </div>
                     <div className="bg-white/5 border border-white/5 p-2.5 rounded-xl">
                       <div className="flex items-center gap-1.5 mb-0.5">
-                         <div className="p-0.5 rounded-full bg-rose-500/20 text-rose-400"><ArrowDownLeft size={10} /></div>
-                         <span className="text-[9px] text-zinc-400 uppercase font-bold">Saídas</span>
+                          <div className="p-0.5 rounded-full bg-rose-500/20 text-rose-400"><ArrowDownLeft size={10} /></div>
+                          <span className="text-[9px] text-zinc-400 uppercase font-bold">Saídas</span>
                       </div>
                       <p className="text-sm font-semibold text-rose-400 leading-none">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: "compact" }).format(monthExpense)}
@@ -255,29 +262,35 @@ export default async function Dashboard(props: DashboardProps) {
             {/* CARD FATURA */}
             <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 shadow-lg shadow-black/5 rounded-3xl overflow-hidden relative group">
                <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-               <CardContent className="p-5 relative flex flex-col h-full">
-                  <div className="flex justify-between items-start mb-3">
+               <CardContent className="p-5 relative flex flex-col h-full justify-between">
+                  <div className="flex justify-between items-start">
                     <div>
                       <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Fatura Atual</p>
                       <h3 className="text-3xl font-bold text-white tracking-tight mt-0.5">
                         {formatCurrency(monthlyInvoiceTotal)}
                       </h3>
                     </div>
-                    <div className="w-9 h-9 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500 border border-rose-500/10">
-                      <CreditCardIcon size={16} />
-                    </div>
+                    
+                    {/* Botão Pagar Fatura com a lógica nova */}
+                    <PayInvoiceDialog 
+                        key={monthName} // Reseta o estado se o mês mudar
+                        invoiceTotal={monthlyInvoiceTotal}
+                        accounts={accountsWithBalance}
+                        monthName={monthName}
+                    />
                   </div>
-                  <div className="mt-auto">
-                     <div className="flex items-center gap-2 text-zinc-500 text-[10px] bg-white/5 p-2.5 rounded-xl border border-white/5">
+                  
+                  <div className="mt-4">
+                      <div className="flex items-center gap-2 text-zinc-500 text-[10px] bg-white/5 p-2.5 rounded-xl border border-white/5">
                         <Activity size={12} />
                         <span>Acumulado no cartão</span>
-                     </div>
+                      </div>
                   </div>
                </CardContent>
             </Card>
           </div>
 
-          {/* GRÁFICO (Altura controlada) */}
+          {/* GRÁFICO */}
           <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 shadow-lg shadow-black/5 rounded-3xl overflow-hidden">
              <CardHeader className="border-b border-white/5 px-6 py-4">
                 <CardTitle className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-widest">
@@ -307,113 +320,76 @@ export default async function Dashboard(props: DashboardProps) {
                 ) : (
                    <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto custom-scrollbar">
                       
-                      {/* Resumo da Fatura (Se houver) */}
+                      {/* Resumo da Fatura na Lista */}
                       {monthlyInvoiceTotal > 0 && (
-                         <div className="flex items-center justify-between p-3 px-5 bg-rose-500/5 border-l-2 border-rose-500/50">
-                            <div className="flex items-center gap-3">
-                               <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-500/10 text-rose-500">
-                                  <Receipt size={14} />
-                               </div>
-                               <div>
-                                  <p className="text-xs font-bold text-white">Fatura Cartão</p>
-                                  <p className="text-[10px] text-zinc-400">
-                                     {listItemsCredit.length} compras agrupadas
-                                  </p>
-                               </div>
-                            </div>
-                            <p className="text-xs font-bold tabular-nums text-rose-400">
-                               - {formatCurrency(monthlyInvoiceTotal)}
-                            </p>
-                         </div>
-                      )}
-
-                      {/* Lista Individual */}
-                      {listItemsNonCredit.map((t) => (
-                        <EditTransactionSheet 
-                           key={t.id} 
-                           categories={categories}
-                           accounts={bankAccounts}
-                           transaction={{
-                             id: t.id,
-                             description: t.description,
-                             amount: Number(t.amount), 
-                             date: t.date,
-                             type: t.type,
-                             paymentMethod: t.paymentMethod,
-                             categoryId: t.categoryId,
-                             bankAccountId: t.bankAccountId
-                           }}
-                        >
-                          <div 
-                            className="w-full flex items-center justify-between p-3 px-5 hover:bg-white/5 transition duration-200 group cursor-pointer"
-                            role="button"
-                          >
+                          <div className="flex items-center justify-between p-3 px-5 bg-rose-500/5 border-l-2 border-rose-500/50">
                              <div className="flex items-center gap-3">
-                               <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
-                                 t.type === 'INCOME' 
-                                   ? 'bg-emerald-500/10 text-emerald-500' 
-                                   : 'bg-zinc-800 text-zinc-400'
-                               }`}>
-                                  {t.type === 'INCOME' ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
-                               </div>
-                               
-                               <div className="overflow-hidden">
-                                 <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition truncate max-w-[180px] md:max-w-[250px]">{t.description}</p>
-                                 <div className="flex items-center gap-2 text-[10px] text-zinc-500 mt-0.5">
-                                   <span>{formatDate(t.date)}</span>
-                                   
-                                   {t.category && (
-                                     <>
-                                       <span className="w-0.5 h-0.5 rounded-full bg-zinc-600" />
-                                       <span>{t.category.name}</span>
-                                     </>
-                                   )}
-
-                                   {t.bankAccount && (
-                                     <>
-                                       <span className="w-0.5 h-0.5 rounded-full bg-zinc-600" />
-                                       <span className="flex items-center gap-1">
-                                          <div 
-                                            className="w-1.5 h-1.5 rounded-full" 
-                                            style={{ backgroundColor: t.bankAccount.color || '#10b981' }} 
-                                          />
-                                          {t.bankAccount.name}
-                                       </span>
-                                     </>
-                                   )}
-                                 </div>
-                               </div>
-                             </div>
-
-                             <div className="flex items-center gap-4">
-                                 <div className="text-right">
-                                   <p className={`text-xs font-bold tabular-nums ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-zinc-200'}`}>
-                                      {t.type === 'INCOME' ? '+' : '-'} {formatCurrency(Number(t.amount))}
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-500/10 text-rose-500">
+                                   <Receipt size={14} />
+                                </div>
+                                <div>
+                                   <p className="text-xs font-bold text-white">Fatura Cartão</p>
+                                   <p className="text-[10px] text-zinc-400">
+                                      {listItemsCredit.length} compras agrupadas
                                    </p>
-                                   <p className="text-[9px] text-zinc-500 capitalize mt-0.5">
-                                        {t.paymentMethod.toLowerCase().replace('_', ' ')}
-                                   </p>
-                                 </div>
-                                 <div className="opacity-0 group-hover:opacity-100 transition-opacity -mr-1">
-                                    <div className="p-1.5 bg-white/10 rounded-full text-white">
-                                        <Pencil size={12} />
-                                    </div>
-                                 </div>
+                                </div>
                              </div>
+                             <p className="text-xs font-bold tabular-nums text-rose-400">
+                                - {formatCurrency(monthlyInvoiceTotal)}
+                             </p>
                           </div>
-                        </EditTransactionSheet>
-                      ))}
-                    </div>
-                 )}
-              </Card>
+                       )}
+
+                       {/* Itens Individuais */}
+                       {listItemsNonCredit.map((t) => (
+                           <EditTransactionSheet 
+                              key={t.id} 
+                              categories={categories}
+                              accounts={bankAccounts}
+                              transaction={{
+                                id: t.id,
+                                description: t.description,
+                                amount: t.amount, // Já é number
+                                date: t.date,
+                                type: t.type,
+                                paymentMethod: t.paymentMethod,
+                                categoryId: t.categoryId,
+                                bankAccountId: t.bankAccountId,
+                                dueDate: t.date,
+                                category: t.category // Já sanitizado acima
+                              }}
+                           >
+                            <div className="w-full flex items-center justify-between p-3 px-5 hover:bg-white/5 transition duration-200 group cursor-pointer">
+                                <div className="flex items-center gap-3">
+                                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${t.type === 'INCOME' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-zinc-800 text-zinc-400'}`}>
+                                      {t.type === 'INCOME' ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
+                                   </div>
+                                   <div className="overflow-hidden">
+                                     <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition truncate max-w-[150px] md:max-w-[250px]">{t.description}</p>
+                                     <div className="flex items-center gap-2 text-[10px] text-zinc-500 mt-0.5">
+                                        <span>{new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(t.date)}</span>
+                                        {t.category && <span className="bg-white/5 px-1.5 py-0.5 rounded border border-white/5">{t.category.name}</span>}
+                                     </div>
+                                   </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className={`text-xs font-bold tabular-nums ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-zinc-200'}`}>
+                                       {t.type === 'INCOME' ? '+' : '-'} {formatCurrency(t.amount)}
+                                    </p>
+                                </div>
+                            </div>
+                           </EditTransactionSheet>
+                       ))}
+                   </div>
+                )}
+             </Card>
           </div>
         </div>
 
         {/* COLUNA DIREITA (Widgets) */}
         <div className="xl:col-span-4 space-y-6">
-           
            <BankAccountsWidget accounts={accountsWithBalance} />
-
+           
            <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 rounded-3xl overflow-hidden p-1 shadow-lg">
                <Tabs defaultValue="manual" className="w-full">
                   <TabsList className="grid w-full grid-cols-2 bg-zinc-950/50 p-1 rounded-2xl h-9 mb-1">
@@ -432,7 +408,11 @@ export default async function Dashboard(props: DashboardProps) {
                </Tabs>
            </Card>
 
-           <CreditCardWidget transactions={widgetData} />
+           {/* Widget com contas passadas para permitir pagamento */}
+           <CreditCardWidget 
+              transactions={widgetData} 
+              accounts={accountsWithBalance} 
+           />
         </div>
       </div>
     </div>
