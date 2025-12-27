@@ -1,70 +1,117 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { 
-  LayoutDashboard, 
-  ArrowRightLeft, 
-  Repeat, 
-  Settings, 
-  CreditCard, // <--- Import Novo
-  Wallet
-} from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Menu, X, LayoutDashboard, CreditCard, ArrowRightLeft, LogOut } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { signOut } from "next-auth/react"
 
-export function MobileNavbar() {
+// Adicionamos a interface para tipar o User
+interface MobileNavbarProps {
+  user: {
+    name?: string | null
+    email?: string | null
+    image?: string | null
+  }
+}
+
+export function MobileNavbar({ user }: MobileNavbarProps) {
+  const [open, setOpen] = useState(false)
   const pathname = usePathname()
 
-  const links = [
-    { href: "/", icon: LayoutDashboard, label: "Início" },
-    { href: "/transactions", icon: ArrowRightLeft, label: "Extrato" },
-    { href: "/credit-card", icon: CreditCard, label: "Cartão" }, // <--- Item Novo
-    { href: "/recurring", icon: Repeat, label: "Fixos" },
-    // { href: "/budget", icon: Wallet, label: "Metas" }, // Opcional: Se couber na tela
-    { href: "/settings", icon: Settings, label: "Ajustes" },
+  const routes = [
+    {
+      href: "/",
+      label: "Visão Geral",
+      icon: LayoutDashboard,
+      active: pathname === "/",
+    },
+    {
+      href: "/transactions",
+      label: "Lançamentos",
+      icon: ArrowRightLeft,
+      active: pathname === "/transactions",
+    },
+    {
+      href: "/credit-card",
+      label: "Cartão de Crédito",
+      icon: CreditCard,
+      active: pathname === "/credit-card",
+    },
   ]
 
   return (
-    <div className="fixed bottom-6 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom-24 duration-700">
-      
-      {/* Cápsula Flutuante (Glassmorphism) */}
-      <nav className="flex items-center justify-between px-2 py-2 bg-zinc-900/80 backdrop-blur-2xl border border-white/10 rounded-full shadow-2xl shadow-black/50">
-        
-        {links.map((link) => {
-          const isActive = pathname === link.href
+    <div className="flex items-center justify-between p-4 border-b border-white/5 bg-zinc-950 md:hidden">
+      <div className="flex items-center gap-2">
+        <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+             <span className="font-bold text-white text-xs">F</span>
+        </div>
+        <span className="font-bold text-white tracking-tight">Finance.ai</span>
+      </div>
+
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild>
+          <Button variant="ghost" size="icon" className="text-zinc-400">
+            <Menu />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="right" className="bg-zinc-950 border-l border-white/10 p-0 flex flex-col w-[300px]">
           
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "relative flex flex-col items-center justify-center w-full h-12 rounded-full transition-all duration-300",
-                isActive ? "text-black" : "text-zinc-500 hover:text-zinc-300"
-              )}
+          <SheetTitle className="sr-only">Menu de Navegação</SheetTitle>
+
+          <div className="p-6 border-b border-white/5 bg-zinc-900/50">
+             <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10 border border-white/10">
+                    <AvatarImage src={user?.image || ""} />
+                    <AvatarFallback className="bg-zinc-800 text-zinc-400">
+                        {user?.name?.[0] || "U"}
+                    </AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col overflow-hidden">
+                    <span className="text-sm font-bold text-white truncate max-w-[150px]">
+                        {user?.name}
+                    </span>
+                    <span className="text-xs text-zinc-500 truncate max-w-[150px]">
+                        {user?.email}
+                    </span>
+                </div>
+             </div>
+          </div>
+
+          <div className="flex-1 flex flex-col gap-1 p-4 overflow-y-auto">
+            {routes.map((route) => (
+              <Link
+                key={route.href}
+                href={route.href}
+                onClick={() => setOpen(false)}
+                className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors ${
+                  route.active
+                    ? "bg-white text-black"
+                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <route.icon size={18} />
+                {route.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className="p-4 border-t border-white/5 bg-zinc-900/50">
+            <Button 
+                variant="ghost" 
+                className="w-full justify-start text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 gap-3"
+                onClick={() => signOut()}
             >
-              {/* Background Ativo (Círculo Branco que se move/aparece) */}
-              {isActive && (
-                <div className="absolute inset-0 bg-white rounded-full shadow-lg shadow-white/10 -z-10 scale-95 transition-transform" />
-              )}
+                <LogOut size={18} />
+                Sair da conta
+            </Button>
+          </div>
 
-              {/* Ícone */}
-              <link.icon 
-                size={20} 
-                strokeWidth={isActive ? 2.5 : 2} 
-                className={cn("transition-transform", isActive && "-translate-y-0.5")}
-              />
-              
-              {/* Label (Opcional: Pode remover se quiser só ícones para ficar mais limpo) */}
-              {!isActive && (
-                 <span className="text-[9px] font-medium mt-0.5 opacity-0 scale-0 absolute">
-                    {link.label}
-                 </span>
-              )}
-            </Link>
-          )
-        })}
-
-      </nav>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
