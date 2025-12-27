@@ -1,84 +1,70 @@
-'use client'
+"use client"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { 
   LayoutDashboard, 
   ArrowRightLeft, 
-  Repeat,
-  User 
+  Repeat, 
+  Settings, 
+  CreditCard, // <--- Import Novo
+  Wallet
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-interface MobileNavbarProps {
-    user: {
-        name?: string | null
-        email?: string | null
-        image?: string | null
-    }
-}
+export function MobileNavbar() {
+  const pathname = usePathname()
 
-export const MobileNavbar = ({ user }: MobileNavbarProps) => {
-    const pathname = usePathname()
+  const links = [
+    { href: "/", icon: LayoutDashboard, label: "Início" },
+    { href: "/transactions", icon: ArrowRightLeft, label: "Extrato" },
+    { href: "/credit-card", icon: CreditCard, label: "Cartão" }, // <--- Item Novo
+    { href: "/recurring", icon: Repeat, label: "Fixos" },
+    // { href: "/budget", icon: Wallet, label: "Metas" }, // Opcional: Se couber na tela
+    { href: "/settings", icon: Settings, label: "Ajustes" },
+  ]
 
-    const links = [
-        { href: "/", icon: LayoutDashboard, label: "Home" },
-        { href: "/transactions", icon: ArrowRightLeft, label: "Transações" },
-        { href: "/recurring", icon: Repeat, label: "Fixos" },
-    ]
+  return (
+    <div className="fixed bottom-6 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom-24 duration-700">
+      
+      {/* Cápsula Flutuante (Glassmorphism) */}
+      <nav className="flex items-center justify-between px-2 py-2 bg-zinc-900/80 backdrop-blur-2xl border border-white/10 rounded-full shadow-2xl shadow-black/50">
+        
+        {links.map((link) => {
+          const isActive = pathname === link.href
+          
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={cn(
+                "relative flex flex-col items-center justify-center w-full h-12 rounded-full transition-all duration-300",
+                isActive ? "text-black" : "text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              {/* Background Ativo (Círculo Branco que se move/aparece) */}
+              {isActive && (
+                <div className="absolute inset-0 bg-white rounded-full shadow-lg shadow-white/10 -z-10 scale-95 transition-transform" />
+              )}
 
-    return (
-        // Centralizado horizontalmente (left-1/2) e flutuante
-        <div className="md:hidden fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
-            
-            {/* Cápsula Flutuante (Glassmorphism High-End) */}
-            <nav className="flex items-center gap-1 p-1.5 rounded-full border border-white/10 bg-zinc-950/70 backdrop-blur-2xl shadow-2xl shadow-black/50 ring-1 ring-white/5">
-                
-                {links.map((link) => {
-                    const Icon = link.icon
-                    const isActive = pathname === link.href
+              {/* Ícone */}
+              <link.icon 
+                size={20} 
+                strokeWidth={isActive ? 2.5 : 2} 
+                className={cn("transition-transform", isActive && "-translate-y-0.5")}
+              />
+              
+              {/* Label (Opcional: Pode remover se quiser só ícones para ficar mais limpo) */}
+              {!isActive && (
+                 <span className="text-[9px] font-medium mt-0.5 opacity-0 scale-0 absolute">
+                    {link.label}
+                 </span>
+              )}
+            </Link>
+          )
+        })}
 
-                    return (
-                        <Link
-                            key={link.href}
-                            href={link.href}
-                            className={cn(
-                                "flex items-center justify-center w-11 h-11 rounded-full transition-all duration-300",
-                                isActive 
-                                    ? "bg-white/15 text-white shadow-sm" 
-                                    : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
-                            )}
-                        >
-                            <Icon 
-                                size={20} // Ícone menor (20px)
-                                strokeWidth={isActive ? 2.5 : 2} 
-                                className={cn("transition-transform active:scale-90", isActive && "text-emerald-400")} 
-                            />
-                        </Link>
-                    )
-                })}
-
-                {/* Separador Sutil */}
-                <div className="w-px h-5 bg-white/10 mx-1" />
-
-                {/* Perfil (Link para Settings) */}
-                <Link
-                    href="/settings"
-                    className={cn(
-                        "relative w-11 h-11 flex items-center justify-center rounded-full transition-all",
-                        pathname === "/settings" ? "opacity-100" : "opacity-80 hover:opacity-100"
-                    )}
-                >
-                    <Avatar className={cn("w-8 h-8 border border-white/10 transition-transform active:scale-95", pathname === "/settings" && "ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-black")}>
-                        <AvatarImage src={user.image || ""} />
-                        <AvatarFallback className="bg-zinc-800 text-[10px] text-zinc-400">
-                            <User size={14} />
-                        </AvatarFallback>
-                    </Avatar>
-                </Link>
-
-            </nav>
-        </div>
-    )
+      </nav>
+    </div>
+  )
 }

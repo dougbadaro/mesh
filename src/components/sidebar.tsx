@@ -11,7 +11,8 @@ import {
   Settings, 
   LogOut,
   User,
-  Repeat
+  Repeat,
+  CreditCard
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -34,6 +35,7 @@ export function Sidebar({ user, className, onLinkClick }: SidebarProps) {
   const links = [
     { href: "/", label: "Visão Geral", icon: LayoutDashboard },
     { href: "/transactions", label: "Transações", icon: ArrowRightLeft },
+    { href: "/credit-card", label: "Cartão", icon: CreditCard },
     { href: "/recurring", label: "Gastos Fixos", icon: Repeat }, 
     { href: "/budget", label: "Orçamento", icon: Wallet }, 
     { href: "/settings", label: "Configurações", icon: Settings },
