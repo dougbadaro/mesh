@@ -1,15 +1,15 @@
 'use client'
 
 import { useState } from "react"
-import { Download, Table, FileSpreadsheet, Loader2 } from "lucide-react"
+import { Download, FileSpreadsheet, Loader2, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 
 export function ExportCsvCard() {
   const [isLoading, setIsLoading] = useState(false)
   
-  // Pega data atual para definir padrões
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState<string>(now.getMonth().toString())
   const [selectedYear, setSelectedYear] = useState<string>(now.getFullYear().toString())
@@ -24,14 +24,12 @@ export function ExportCsvCard() {
     { value: "all", label: "Todo o Período" }
   ]
 
-  // Gera lista de anos (Do atual para trás, ex: 2025, 2024, 2023)
   const currentYear = now.getFullYear()
   const years = [currentYear, currentYear - 1, currentYear - 2].map(String)
 
   const handleDownload = async () => {
     setIsLoading(true)
     try {
-      // Constrói a URL com Query Params
       const params = new URLSearchParams()
       params.append("month", selectedMonth)
       params.append("year", selectedYear)
@@ -45,7 +43,6 @@ export function ExportCsvCard() {
       const a = document.createElement('a')
       a.href = url
       
-      // Nome sugerido, mas o backend também manda no header
       const suffix = selectedMonth === 'all' ? 'completo' : `${Number(selectedMonth) + 1}-${selectedYear}`
       a.download = `mesh-relatorio-${suffix}.csv`
       
@@ -62,69 +59,74 @@ export function ExportCsvCard() {
   }
 
   return (
-    <Card className="bg-zinc-900/20 border-white/5">
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Table size={18} className="text-emerald-500" />
-          Relatórios
-        </CardTitle>
-        <CardDescription>
-          Selecione o período e baixe seus dados formatados para Excel.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col gap-4 p-4 bg-zinc-950/50 rounded-xl border border-white/5">
-          
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-zinc-900 rounded-lg border border-white/5 hidden sm:block">
-              <FileSpreadsheet className="text-emerald-400" size={24} />
+    <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 rounded-3xl overflow-hidden shadow-sm">
+      <CardHeader className="p-5 border-b border-white/5 bg-white/[0.02]">
+        <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/10 text-emerald-500">
+                <FileSpreadsheet size={18} />
             </div>
-            
-            <div className="flex-1 grid grid-cols-2 gap-2">
-                {/* SELECT MÊS */}
+            <div>
+                <CardTitle className="text-sm font-bold text-zinc-200">Relatórios</CardTitle>
+                <CardDescription className="text-[10px] text-zinc-500">Selecione o período e baixe seus dados.</CardDescription>
+            </div>
+        </div>
+      </CardHeader>
+      
+      <CardContent className="p-5 space-y-5">
+        
+        {/* Grid de Seleção */}
+        <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">Mês de Referência</Label>
                 <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                    <SelectTrigger className="bg-zinc-900 border-white/10 h-9">
+                    <SelectTrigger className="bg-zinc-950/50 border-white/10 h-9 text-sm rounded-xl focus:ring-emerald-500/30">
                         <SelectValue placeholder="Mês" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-zinc-900 border-white/10 max-h-[200px]">
                         {months.map(m => (
                             <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
+            </div>
 
-                {/* SELECT ANO */}
+            <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">Ano Fiscal</Label>
                 <Select value={selectedYear} onValueChange={setSelectedYear} disabled={selectedMonth === 'all'}>
-                    <SelectTrigger className="bg-zinc-900 border-white/10 h-9">
-                         <SelectValue placeholder="Ano" />
+                    <SelectTrigger className="bg-zinc-950/50 border-white/10 h-9 text-sm rounded-xl focus:ring-emerald-500/30">
+                         <div className="flex items-center gap-2">
+                            <Calendar size={14} className="text-zinc-500" />
+                            <SelectValue placeholder="Ano" />
+                         </div>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-zinc-900 border-white/10">
                         {years.map(y => (
                             <SelectItem key={y} value={y}>{y}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
             </div>
-          </div>
-          
-          <Button 
+        </div>
+        
+        {/* Botão de Download */}
+        <Button 
             onClick={handleDownload} 
             disabled={isLoading}
-            className="w-full bg-zinc-100 text-black hover:bg-emerald-400 hover:text-black hover:border-emerald-500/50 transition-all font-medium"
-          >
+            className="w-full bg-white text-black hover:bg-zinc-200 h-9 text-xs font-bold rounded-xl shadow-lg shadow-white/5 transition-transform active:scale-[0.98]"
+        >
             {isLoading ? (
                 <>
-                    <Loader2 size={16} className="mr-2 animate-spin" />
+                    <Loader2 size={14} className="mr-2 animate-spin" />
                     Processando...
                 </>
             ) : (
                 <>
-                    <Download size={16} className="mr-2" />
+                    <Download size={14} className="mr-2" />
                     Baixar Relatório {selectedMonth === 'all' ? 'Completo' : 'do Mês'}
                 </>
             )}
-          </Button>
-        </div>
+        </Button>
+
       </CardContent>
     </Card>
   )

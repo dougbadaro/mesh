@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useTransition, useEffect, useMemo } from "react"
+import { useState, useTransition, useMemo } from "react"
 import { createCategory, deleteCategory } from "@/app/actions/categories"
-import { Plus, Trash2, Lock, Tag, Loader2 } from "lucide-react"
+import { Plus, Trash2, Lock, Tag, Loader2, ArrowUpCircle, ArrowDownCircle } from "lucide-react"
 
-// ... (seus imports do Shadcn permanecem iguais)
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -15,7 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 
 interface CategoryDTO {
   id: string
@@ -34,35 +34,41 @@ interface CategoryManagerProps {
 
 // --- SUB-COMPONENTE DE LISTAGEM ---
 const CategoryList = ({ items, onDelete, isPending }: { items: CategoryDTO[], onDelete: (id: string) => void, isPending: boolean }) => (
-  <div className="space-y-2 mt-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar font-sans">
+  <div className="space-y-1.5 mt-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
       {items.length === 0 && (
-          <p className="text-sm text-zinc-500 italic text-center py-4">Nenhuma categoria encontrada.</p>
+          <div className="flex flex-col items-center justify-center py-8 text-zinc-500 gap-2 border border-dashed border-white/5 rounded-xl bg-white/[0.01]">
+             <Tag size={20} className="opacity-20" />
+             <p className="text-xs">Nenhuma categoria.</p>
+          </div>
       )}
       {items.map(cat => (
-          <div key={cat.id} className="flex items-center justify-between p-3 bg-zinc-900/50 border border-white/5 rounded-xl group hover:border-white/10 transition-colors">
-              <div className="flex items-center gap-3 text-left">
-                  <div className={`p-2 rounded-lg ${cat.type === 'INCOME' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                      <Tag size={16} />
+          <div key={cat.id} className="group flex items-center justify-between p-2 px-3 bg-zinc-900/30 border border-white/5 rounded-xl hover:bg-white/5 transition-colors">
+              <div className="flex items-center gap-3">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                      cat.type === 'INCOME' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
+                  }`}>
+                      {cat.type === 'INCOME' ? <ArrowUpCircle size={14} /> : <ArrowDownCircle size={14} />}
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium text-zinc-200">{cat.name}</span>
+                    <span className="text-xs font-medium text-zinc-200">{cat.name}</span>
                     {cat.userId === null && (
-                        <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-tighter">System Default</span>
+                        <span className="text-[9px] text-zinc-600 font-medium uppercase tracking-wider">Sistema</span>
                     )}
                   </div>
               </div>
-              <div className="flex items-center gap-2">
+              
+              <div className="flex items-center">
                 {cat.userId === null ? (
-                    <div className="p-2 text-zinc-800"><Lock size={14} /></div>
+                    <Lock size={12} className="text-zinc-700 mr-2" />
                 ) : (
                     <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="h-8 w-8 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                        className="h-7 w-7 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={() => onDelete(cat.id)}
                         disabled={isPending}
                     >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                     </Button>
                 )}
               </div>
@@ -71,17 +77,12 @@ const CategoryList = ({ items, onDelete, isPending }: { items: CategoryDTO[], on
   </div>
 )
 
-export function CategoryManager({ categories, currentUserId }: CategoryManagerProps) {
+export function CategoryManager({ categories }: CategoryManagerProps) {
   const [isPending, startTransition] = useTransition()
-  
-  // SOLUÇÃO: Em vez de useEffect + setState, usamos um check simples de montagem.
-  // Ou melhor: removemos a lógica de isMounted e deixamos o React lidar com a hidratação
-  // usando suppressHydrationWarning se necessário, mas o ideal é filtrar os dados no render.
   
   const [newName, setNewName] = useState("")
   const [newType, setNewType] = useState<string>("EXPENSE")
 
-  // Derivando estados para evitar filtros desnecessários a cada render
   const { expenses, incomes } = useMemo(() => ({
     expenses: categories.filter(c => c.type === "EXPENSE"),
     incomes: categories.filter(c => c.type === "INCOME")
@@ -99,85 +100,70 @@ export function CategoryManager({ categories, currentUserId }: CategoryManagerPr
   }
 
   const handleDelete = (id: string) => {
-    if (!confirm("Confirm operation: Transactions linked to this category will be reset to 'General'.")) return
+    if (!confirm("Atenção: Transações vinculadas a esta categoria serão movidas para 'Geral'.")) return
     startTransition(async () => {
         await deleteCategory(id)
     })
   }
 
   return (
-    <Card className="bg-zinc-900/20 border-white/5 overflow-hidden shadow-2xl">
-        <CardHeader className="border-b border-white/5 bg-white/[0.01]">
-            <CardTitle className="text-lg font-bold flex items-center gap-2">
-              <Terminal size={18} className="text-emerald-500" />
-              Category Schema
-            </CardTitle>
-            <CardDescription className="text-[10px] font-mono uppercase tracking-widest opacity-50">Classification Layer Management</CardDescription>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
+    <Card className="bg-zinc-900/40 border-white/5 backdrop-blur-xl rounded-3xl shadow-sm overflow-hidden">
+        <CardContent className="p-5">
             
-            <div className="flex flex-col sm:flex-row gap-3 p-4 bg-zinc-950/40 rounded-xl border border-white/5 shadow-inner">
-                <div className="flex-1">
-                    <Input 
-                        placeholder="Label name..." 
-                        value={newName}
-                        onChange={e => setNewName(e.target.value)}
-                        className="bg-zinc-900/50 border-white/5 focus-visible:ring-emerald-500/30 h-10 font-sans"
-                    />
+            {/* Input Compacto */}
+            <div className="flex gap-2 p-1 bg-zinc-950/50 rounded-xl border border-white/5 mb-6">
+                <Input 
+                    placeholder="Nova categoria..." 
+                    value={newName}
+                    onChange={e => setNewName(e.target.value)}
+                    className="flex-1 bg-transparent border-none focus-visible:ring-0 h-9 text-sm placeholder:text-zinc-600"
+                />
+                
+                <div className="flex gap-2">
+                    <Select value={newType} onValueChange={setNewType}>
+                        <SelectTrigger className="w-[110px] bg-zinc-900 border-white/10 h-9 text-[10px] uppercase font-bold tracking-wide rounded-lg focus:ring-0">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-900 border-white/10">
+                            <SelectItem value="EXPENSE">Despesa</SelectItem>
+                            <SelectItem value="INCOME">Receita</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    
+                    <Button 
+                        onClick={handleCreate} 
+                        disabled={isPending || !newName}
+                        className="bg-white text-black hover:bg-zinc-200 h-9 w-9 rounded-lg p-0 shadow-sm"
+                    >
+                        {isPending ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+                    </Button>
                 </div>
-                <Select value={newType} onValueChange={setNewType}>
-                    <SelectTrigger className="w-full sm:w-[140px] bg-zinc-900 border-white/5 h-10 font-mono text-xs">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-950 border-white/10">
-                        <SelectItem value="EXPENSE">EXPENSE</SelectItem>
-                        <SelectItem value="INCOME">INCOME</SelectItem>
-                    </SelectContent>
-                </Select>
-                <Button 
-                    onClick={handleCreate} 
-                    disabled={isPending || !newName}
-                    className="bg-white text-black hover:bg-zinc-200 font-bold h-10 px-6 rounded-lg transition-all active:scale-95"
-                >
-                    {isPending ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
-                    <span className="ml-2 uppercase text-[11px] tracking-tighter">Add Entry</span>
-                </Button>
             </div>
 
             <Tabs defaultValue="expenses" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 bg-zinc-950 p-1 border border-white/5 rounded-lg h-11">
-                    <TabsTrigger value="expenses" className="rounded-md data-[state=active]:bg-zinc-900 data-[state=active]:text-emerald-400 font-mono text-[10px]">DEBITS</TabsTrigger>
-                    <TabsTrigger value="incomes" className="rounded-md data-[state=active]:bg-zinc-900 data-[state=active]:text-emerald-400 font-mono text-[10px]">CREDITS</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 bg-black/20 p-1 border border-white/5 rounded-xl h-9 mb-2">
+                    <TabsTrigger 
+                        value="expenses" 
+                        className="rounded-lg text-[10px] font-bold uppercase tracking-widest data-[state=active]:bg-zinc-800 data-[state=active]:text-white h-7"
+                    >
+                        Despesas <Badge variant="secondary" className="ml-2 h-4 px-1 text-[9px] bg-zinc-950 text-zinc-500">{expenses.length}</Badge>
+                    </TabsTrigger>
+                    <TabsTrigger 
+                        value="incomes" 
+                        className="rounded-lg text-[10px] font-bold uppercase tracking-widest data-[state=active]:bg-zinc-800 data-[state=active]:text-white h-7"
+                    >
+                        Receitas <Badge variant="secondary" className="ml-2 h-4 px-1 text-[9px] bg-zinc-950 text-zinc-500">{incomes.length}</Badge>
+                    </TabsTrigger>
                 </TabsList>
-                <TabsContent value="expenses">
+                
+                <TabsContent value="expenses" className="mt-0">
                     <CategoryList items={expenses} onDelete={handleDelete} isPending={isPending} />
                 </TabsContent>
-                <TabsContent value="incomes">
+                <TabsContent value="incomes" className="mt-0">
                     <CategoryList items={incomes} onDelete={handleDelete} isPending={isPending} />
                 </TabsContent>
             </Tabs>
         </CardContent>
     </Card>
-  )
-}
-
-// Helper local para o ícone que faltou no import anterior
-function Terminal({ size, className }: { size: number, className: string }) {
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      width={size} 
-      height={size} 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      className={className}
-    >
-      <polyline points="4 17 10 11 4 5"></polyline>
-      <line x1="12" y1="19" x2="20" y2="19"></line>
-    </svg>
   )
 }

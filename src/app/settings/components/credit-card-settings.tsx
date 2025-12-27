@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { CreditCard, Save, Loader2, AlertTriangle } from "lucide-react"
+import { CreditCard, Save, Loader2, AlertTriangle, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
+import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card"
 import { updateCreditCardSettings } from "@/app/actions/settings"
+import { cn } from "@/lib/utils"
 
 interface CreditCardSettingsProps {
   initialClosingDay: number
@@ -16,97 +17,127 @@ interface CreditCardSettingsProps {
 
 export function CreditCardSettings({ initialClosingDay, initialDueDay }: CreditCardSettingsProps) {
   const [isPending, startTransition] = useTransition()
-  
+  const [scope, setScope] = useState("future")
+
   return (
-    <Card className="bg-zinc-900/40 border-white/5">
-      <CardHeader>
-        <div className="flex items-center gap-3">
-            <div className="p-2 bg-rose-500/10 text-rose-500 rounded-lg">
-                <CreditCard size={20} />
+    <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 rounded-3xl overflow-hidden shadow-sm">
+      <CardHeader className="p-5 border-b border-white/5 bg-white/[0.02]">
+         <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/10 text-emerald-500">
+                <CreditCard size={18} />
             </div>
             <div>
-                <CardTitle className="text-lg">Configuração do Cartão</CardTitle>
-                <CardDescription>Defina as datas para o cálculo correto das faturas.</CardDescription>
+                <h3 className="text-sm font-bold text-zinc-200">Configuração do Cartão</h3>
+                <p className="text-[10px] text-zinc-500">Defina as datas de corte e vencimento.</p>
             </div>
-        </div>
+         </div>
       </CardHeader>
       
       <form action={(formData) => startTransition(() => updateCreditCardSettings(formData))}>
-        <CardContent className="space-y-6">
+        <CardContent className="p-5 space-y-6">
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                    <Label htmlFor="closingDay">Dia do Fechamento (Melhor dia)</Label>
-                    <div className="relative">
+            {/* Inputs Grid */}
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                    <Label htmlFor="closingDay" className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">Dia Fechamento</Label>
+                    <div className="relative group">
+                        <div className="absolute left-3 top-2.5 text-zinc-500 group-focus-within:text-white transition-colors">
+                            <Calendar size={14} />
+                        </div>
                         <Input 
                             id="closingDay"
                             name="closingDay"
                             type="number"
-                            min={1}
-                            max={31}
+                            min={1} max={31}
                             defaultValue={initialClosingDay}
-                            className="bg-zinc-950/50 border-white/10"
+                            className="pl-9 h-9 bg-zinc-950/50 border-white/10 text-sm focus-visible:ring-emerald-500/30 rounded-xl"
                         />
-                        <p className="text-[10px] text-zinc-500 mt-1">
-                            Dia que a fatura vira. Apenas novas compras serão afetadas.
-                        </p>
                     </div>
+                    <p className="text-[10px] text-zinc-600 pl-1">Melhor dia de compra.</p>
                 </div>
 
-                <div className="space-y-2">
-                    <Label htmlFor="dueDay">Dia do Vencimento</Label>
-                    <Input 
-                        id="dueDay"
-                        name="dueDay"
-                        type="number"
-                        min={1}
-                        max={31}
-                        defaultValue={initialDueDay}
-                        className="bg-zinc-950/50 border-white/10"
-                    />
-                    <p className="text-[10px] text-zinc-500 mt-1">
-                        Dia final para pagamento da fatura.
-                    </p>
+                <div className="space-y-1.5">
+                    <Label htmlFor="dueDay" className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">Dia Vencimento</Label>
+                    <div className="relative group">
+                        <div className="absolute left-3 top-2.5 text-zinc-500 group-focus-within:text-white transition-colors">
+                            <Calendar size={14} />
+                        </div>
+                        <Input 
+                            id="dueDay"
+                            name="dueDay"
+                            type="number"
+                            min={1} max={31}
+                            defaultValue={initialDueDay}
+                            className="pl-9 h-9 bg-zinc-950/50 border-white/10 text-sm focus-visible:ring-emerald-500/30 rounded-xl"
+                        />
+                    </div>
+                    <p className="text-[10px] text-zinc-600 pl-1">Pagamento da fatura.</p>
                 </div>
             </div>
 
-            {/* SELEÇÃO DE ALCANCE DA MUDANÇA */}
-            <div className="bg-zinc-900/50 p-4 rounded-xl border border-white/5 space-y-3">
-                <Label className="text-sm font-medium text-zinc-300">Como aplicar essas alterações?</Label>
+            {/* Scope Selection - Cards Estilizados */}
+            <div className="space-y-2">
+                <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">Aplicação das Mudanças</Label>
                 
-                <RadioGroup defaultValue="future" name="scope" className="gap-3">
+                <RadioGroup defaultValue="future" name="scope" onValueChange={setScope} className="grid grid-cols-1 gap-2">
                     
-                    {/* Opção 1: Padrão */}
-                    <div className="flex items-start space-x-3 p-3 rounded-lg hover:bg-white/5 border border-transparent hover:border-white/5 transition-colors cursor-pointer">
-                        <RadioGroupItem value="future" id="scope-future" className="mt-1" />
-                        <div className="space-y-1">
-                            <Label htmlFor="scope-future" className="font-medium cursor-pointer">Apenas novas transações</Label>
-                            <p className="text-xs text-zinc-500">
-                                Transações passadas e parcelas já geradas não serão alteradas.
+                    {/* Opção 1: Futuro (Padrão) */}
+                    <Label
+                        htmlFor="scope-future"
+                        className={cn(
+                            "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none",
+                            scope === 'future' 
+                                ? "bg-emerald-500/10 border-emerald-500/20" 
+                                : "bg-zinc-900/30 border-white/5 hover:bg-white/5"
+                        )}
+                    >
+                        <RadioGroupItem value="future" id="scope-future" className="mt-0.5 border-white/20 text-emerald-500" />
+                        <div className="space-y-0.5">
+                            <span className={cn("text-xs font-bold block", scope === 'future' ? "text-emerald-400" : "text-zinc-300")}>
+                                Apenas novas compras
+                            </span>
+                            <p className="text-[10px] text-zinc-500 leading-tight">
+                                Mantém o histórico das faturas anteriores intacto. Recomendado.
                             </p>
                         </div>
-                    </div>
+                    </Label>
 
-                    {/* Opção 2: Retroativo */}
-                    <div className="flex items-start space-x-3 p-3 rounded-lg hover:bg-rose-500/5 border border-transparent hover:border-rose-500/20 transition-colors cursor-pointer">
-                        <RadioGroupItem value="all" id="scope-all" className="mt-1 text-rose-500 border-rose-500/50" />
-                        <div className="space-y-1">
-                            <Label htmlFor="scope-all" className="font-medium cursor-pointer text-rose-200">Atualizar transações existentes</Label>
-                            <p className="text-xs text-zinc-500">
-                                <span className="text-rose-400 flex items-center gap-1 mb-1">
-                                    <AlertTriangle size={10} /> Atenção:
-                                </span>
-                                Isso mudará o <strong>Dia de Vencimento</strong> de todas as suas compras no cartão (passadas e futuras) para o novo dia escolhido.
-                            </p>
+                    {/* Opção 2: Retroativo (Perigo) */}
+                    <Label
+                        htmlFor="scope-all"
+                        className={cn(
+                            "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none",
+                            scope === 'all' 
+                                ? "bg-rose-500/10 border-rose-500/20" 
+                                : "bg-zinc-900/30 border-white/5 hover:bg-white/5"
+                        )}
+                    >
+                        <RadioGroupItem value="all" id="scope-all" className="mt-0.5 border-white/20 text-rose-500" />
+                        <div className="space-y-0.5">
+                            <span className={cn("text-xs font-bold block", scope === 'all' ? "text-rose-400" : "text-zinc-300")}>
+                                Atualizar tudo (Retroativo)
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-1">
+                                <AlertTriangle size={10} className="text-rose-500 shrink-0" />
+                                <p className="text-[10px] text-zinc-500 leading-tight">
+                                    Recalcula vencimentos de <strong>todas</strong> as compras já feitas.
+                                </p>
+                            </div>
                         </div>
-                    </div>
+                    </Label>
+
                 </RadioGroup>
             </div>
 
         </CardContent>
-        <CardFooter className="border-t border-white/5 pt-4">
-            <Button type="submit" disabled={isPending} className="bg-white text-black hover:bg-zinc-200 w-full sm:w-auto">
-                {isPending ? <Loader2 className="animate-spin mr-2" size={16}/> : <Save className="mr-2" size={16}/>}
+
+        <CardFooter className="p-4 bg-zinc-950/30 border-t border-white/5 flex justify-end">
+            <Button 
+                type="submit" 
+                disabled={isPending} 
+                className="bg-white text-black hover:bg-zinc-200 h-9 text-xs font-bold rounded-xl px-5 shadow-lg shadow-white/5 transition-transform active:scale-[0.98]"
+            >
+                {isPending ? <Loader2 className="animate-spin mr-2" size={14}/> : <Save className="mr-2" size={14}/>}
                 Salvar Configurações
             </Button>
         </CardFooter>

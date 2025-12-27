@@ -3,16 +3,16 @@
 import { useState } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch" 
-import { Plus, Wallet, Trash2, Landmark, Banknote, TrendingUp, Eye, EyeOff, Pencil, AlertTriangle } from "lucide-react"
+import { Plus, Wallet, Trash2, Landmark, Banknote, TrendingUp, EyeOff, Pencil, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createBankAccount, updateBankAccount, deleteBankAccount } from "@/app/actions/bank-accounts"
 import { cn } from "@/lib/utils"
 
-// --- MONEY INPUT (MANTIDO) ---
+// --- MONEY INPUT ---
 interface MoneyInputProps {
   value: number
   onChange: (value: number) => void
@@ -34,7 +34,7 @@ function MoneyInput({ value, onChange, disabled }: MoneyInputProps) {
       value={displayValue}
       onChange={handleChange}
       disabled={disabled}
-      className="bg-zinc-900 border-white/10 font-mono text-emerald-400 font-bold"
+      className="bg-zinc-950/50 border-white/10 font-bold text-emerald-400 h-9"
       placeholder="R$ 0,00"
     />
   )
@@ -47,7 +47,7 @@ type BankAccount = {
   type: string
   initialBalance: number
   currentBalance?: number
-  transactionCount?: number // <--- NOVO
+  transactionCount?: number 
   color: string | null
   includeInTotal: boolean 
 }
@@ -57,40 +57,33 @@ interface BankAccountManagerProps {
 }
 
 const COLORS = [
-  { value: "#820AD1", label: "Roxo (Nubank)" },
-  { value: "#F97316", label: "Laranja (Inter)" },
-  { value: "#10B981", label: "Verde (Padrão)" },
+  { value: "#820AD1", label: "Roxo" },
+  { value: "#F97316", label: "Laranja" },
+  { value: "#10B981", label: "Verde" },
   { value: "#3B82F6", label: "Azul" },
   { value: "#EF4444", label: "Vermelho" },
   { value: "#EAB308", label: "Amarelo" },
-  { value: "#71717A", label: "Cinza (Dinheiro)" },
+  { value: "#71717A", label: "Cinza" },
 ]
 
 export function BankAccountManager({ initialAccounts }: BankAccountManagerProps) {
   const [accounts, setAccounts] = useState(initialAccounts)
   
-  // Modais
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
-  
   const [isLoading, setIsLoading] = useState(false)
   
-  // Controle de Edição e Exclusão
   const [editingId, setEditingId] = useState<string | null>(null)
   const [accountToDelete, setAccountToDelete] = useState<BankAccount | null>(null)
 
-  // Form State (Criação/Edição)
   const [newName, setNewName] = useState("")
   const [newBalance, setNewBalance] = useState(0) 
   const [newType, setNewType] = useState("CHECKING")
   const [newColor, setNewColor] = useState(COLORS[2].value)
   const [migrateLegacy, setMigrateLegacy] = useState(false)
   const [includeInTotal, setIncludeInTotal] = useState(true)
-
-  // Form State (Exclusão)
   const [deleteTransactions, setDeleteTransactions] = useState(false)
 
-  // --- FUNÇÕES DO MODAL DE FORMULÁRIO ---
   const openCreateModal = () => {
     setEditingId(null)
     setNewName("")
@@ -137,11 +130,6 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
     setIsLoading(false)
 
     if (result.success) {
-        if (result.migratedCount && result.migratedCount > 0) {
-            alert(`Sucesso! ${result.migratedCount} transações antigas foram vinculadas.`)
-        } else if (migrateLegacy) {
-            alert("Operação realizada, mas nenhuma transação antiga foi encontrada.")
-        }
         setIsFormOpen(false)
         window.location.reload()
     } else {
@@ -149,10 +137,9 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
     }
   }
 
-  // --- FUNÇÕES DE EXCLUSÃO ---
   const openDeleteModal = (acc: BankAccount) => {
     setAccountToDelete(acc)
-    setDeleteTransactions(false) // Padrão é NÃO apagar transações (segurança)
+    setDeleteTransactions(false) 
     setIsDeleteOpen(true)
   }
 
@@ -160,7 +147,6 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
     if (!accountToDelete) return
     setIsLoading(true)
     
-    // Passamos o 2º parametro (deleteTransactions)
     const result = await deleteBankAccount(accountToDelete.id, deleteTransactions)
     
     setIsLoading(false)
@@ -175,48 +161,47 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
 
   const getIcon = (type: string) => {
     switch (type) {
-      case "INVESTMENT": return <TrendingUp size={18} />
-      case "CASH": return <Banknote size={18} />
-      default: return <Landmark size={18} />
+      case "INVESTMENT": return <TrendingUp size={16} />
+      case "CASH": return <Banknote size={16} />
+      default: return <Landmark size={16} />
     }
   }
 
   const getTypeLabel = (type: string) => {
     switch (type) {
         case "INVESTMENT": return "Investimento"
-        case "CASH": return "Dinheiro Físico"
+        case "CASH": return "Dinheiro"
         default: return "Conta Corrente"
     }
   }
 
   return (
     <div className="space-y-4">
-       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {accounts.map((acc) => (
           <div 
             key={acc.id} 
-            className="group flex items-center justify-between p-4 rounded-xl border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/60 transition-all relative overflow-hidden"
+            className="group flex items-center justify-between p-3 rounded-xl border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/60 transition-all relative overflow-hidden"
           >
             <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: acc.color || "#10B981" }} />
             
-            <div className="flex items-center gap-4 pl-2">
-              <div className="p-2.5 rounded-lg bg-zinc-950 border border-white/5 text-zinc-400">
+            <div className="flex items-center gap-3 pl-2">
+              <div className="h-9 w-9 rounded-lg bg-zinc-950 border border-white/5 flex items-center justify-center text-zinc-400 shrink-0">
                 {getIcon(acc.type)}
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-zinc-100 text-sm">{acc.name}</h4>
+                    <h4 className="font-semibold text-zinc-200 text-xs truncate">{acc.name}</h4>
                     {!acc.includeInTotal && (
-                        <div title="Não soma no total geral (Saldo Oculto)">
-                            <EyeOff size={12} className="text-zinc-600 cursor-help" />
-                        </div>
+                        <EyeOff size={10} className="text-zinc-600 shrink-0" />
                     )}
                 </div>
-                <p className="text-xs text-zinc-500">{getTypeLabel(acc.type)}</p>
-                {/* Mostra contagem de transações como info extra */}
-                <p className="text-[10px] text-zinc-600 mt-0.5">
-                   {acc.transactionCount ? `${acc.transactionCount} transações` : 'Sem movimentações'}
-                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-zinc-500 bg-white/5 px-1.5 rounded border border-white/5">{getTypeLabel(acc.type)}</span>
+                    {acc.transactionCount ? (
+                        <span className="text-[9px] text-zinc-600">{acc.transactionCount} mov.</span>
+                    ) : null}
+                </div>
               </div>
             </div>
 
@@ -224,18 +209,18 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
                 <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="text-zinc-600 hover:text-white hover:bg-white/10"
+                    className="h-7 w-7 text-zinc-500 hover:text-white hover:bg-white/10 rounded-lg"
                     onClick={() => openEditModal(acc)}
                 >
-                    <Pencil size={16} />
+                    <Pencil size={14} />
                 </Button>
                 <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="text-zinc-600 hover:text-red-400 hover:bg-red-500/10"
-                    onClick={() => openDeleteModal(acc)} // Abre o Modal Personalizado
+                    className="h-7 w-7 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                    onClick={() => openDeleteModal(acc)} 
                 >
-                    <Trash2 size={16} />
+                    <Trash2 size={14} />
                 </Button>
             </div>
           </div>
@@ -244,68 +229,67 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
         {/* BOTÃO NOVA CARTEIRA */}
         <button 
             onClick={openCreateModal}
-            className="flex flex-col items-center justify-center p-4 rounded-xl border border-dashed border-zinc-800 bg-zinc-900/20 hover:bg-zinc-900/40 hover:border-emerald-500/30 transition-all gap-2 min-h-[88px] text-zinc-500 hover:text-emerald-500 w-full"
+            className="flex flex-col items-center justify-center p-3 rounded-xl border border-dashed border-zinc-800 bg-zinc-900/20 hover:bg-zinc-900/40 hover:border-emerald-500/30 transition-all gap-1.5 min-h-[70px] text-zinc-500 hover:text-emerald-500 w-full"
         >
-            <Plus size={24} />
-            <span className="text-xs font-medium uppercase tracking-wider">Nova Carteira</span>
+            <Plus size={20} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Adicionar</span>
         </button>
 
-        {/* --- MODAL DE FORMULÁRIO (CRIAR/EDITAR) --- */}
+        {/* --- MODAL DE FORMULÁRIO --- */}
         <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-            <DialogContent className="bg-zinc-950 border-white/10 text-zinc-100 sm:max-w-[425px]">
+            <DialogContent className="bg-zinc-950 border-white/10 text-zinc-100 sm:max-w-sm rounded-3xl">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <Wallet className="text-emerald-500" size={20} />
+                    <DialogTitle className="flex items-center gap-2 text-sm">
+                        <Wallet className="text-emerald-500" size={16} />
                         {editingId ? "Editar Carteira" : "Criar Carteira"}
                     </DialogTitle>
                 </DialogHeader>
 
-                <div className="grid gap-4 py-4">
-                    {/* (Campos de Nome, Tipo, Saldo e Cor mantidos iguais) */}
-                    <div className="grid gap-2">
-                        <Label htmlFor="name">Nome da Conta</Label>
+                <div className="grid gap-4 py-2">
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="name" className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider pl-1">Nome</Label>
                         <Input 
                             id="name" 
-                            placeholder="Ex: Nubank, Carteira..." 
-                            className="bg-zinc-900 border-white/10"
+                            placeholder="Ex: Nubank..." 
+                            className="bg-zinc-950/50 border-white/10 h-9 text-sm focus-visible:ring-emerald-500/30"
                             value={newName}
                             onChange={e => setNewName(e.target.value)}
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                            <Label>Tipo</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-1.5">
+                            <Label className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider pl-1">Tipo</Label>
                             <Select value={newType} onValueChange={setNewType}>
-                                <SelectTrigger className="bg-zinc-900 border-white/10">
+                                <SelectTrigger className="bg-zinc-950/50 border-white/10 h-9 text-xs">
                                     <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent className="bg-zinc-900 border-white/10 text-zinc-200">
+                                <SelectContent className="bg-zinc-900 border-white/10">
                                     <SelectItem value="CHECKING">Conta Corrente</SelectItem>
-                                    <SelectItem value="CASH">Dinheiro Físico</SelectItem>
+                                    <SelectItem value="CASH">Dinheiro</SelectItem>
                                     <SelectItem value="INVESTMENT">Investimento</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="balance">
-                                {editingId ? "Saldo Atual (Ajustar)" : "Saldo Inicial"}
+                        <div className="grid gap-1.5">
+                            <Label className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider pl-1">
+                                {editingId ? "Saldo Atual" : "Saldo Inicial"}
                             </Label>
                             <MoneyInput value={newBalance} onChange={setNewBalance} />
                         </div>
                     </div>
 
-                    <div className="grid gap-2">
-                        <Label>Cor de Identificação</Label>
-                        <div className="flex flex-wrap gap-3 p-1">
+                    <div className="grid gap-1.5">
+                        <Label className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider pl-1">Cor</Label>
+                        <div className="flex flex-wrap gap-2">
                             {COLORS.map((c) => (
                                 <button
                                     key={c.value}
                                     type="button"
                                     onClick={() => setNewColor(c.value)}
                                     className={cn(
-                                        "w-8 h-8 rounded-full border-2 transition-all",
-                                        newColor === c.value ? "border-white scale-110" : "border-transparent opacity-70 hover:scale-105"
+                                        "w-6 h-6 rounded-full border-2 transition-all",
+                                        newColor === c.value ? "border-white scale-110 shadow-sm" : "border-transparent opacity-60 hover:opacity-100"
                                     )}
                                     style={{ backgroundColor: c.value }}
                                 />
@@ -313,97 +297,83 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
                         </div>
                     </div>
 
-                    <div className="space-y-3 pt-2">
-                        <div className="flex items-center justify-between p-3 bg-zinc-900/30 border border-white/5 rounded-lg">
-                             <div className="space-y-0.5">
-                                <Label className="text-sm font-medium text-zinc-200">Visível no Dashboard</Label>
-                                <p className="text-xs text-zinc-500">Somar ao total geral.</p>
-                             </div>
-                             <Switch checked={includeInTotal} onCheckedChange={setIncludeInTotal} className="data-[state=checked]:bg-emerald-500" />
+                    <div className="space-y-2 pt-2">
+                        <div className="flex items-center justify-between p-2 px-3 bg-zinc-900/30 border border-white/5 rounded-lg">
+                             <Label className="text-xs font-medium text-zinc-300 cursor-pointer flex-1" htmlFor="include">Visível no Dashboard</Label>
+                             <Switch id="include" checked={includeInTotal} onCheckedChange={setIncludeInTotal} className="scale-75 data-[state=checked]:bg-emerald-500" />
                         </div>
 
-                        <div className="flex items-center gap-3 p-3 bg-zinc-900/30 border border-white/5 rounded-lg">
+                        <div className="flex items-center gap-3 p-2 px-3 bg-zinc-900/30 border border-white/5 rounded-lg">
                              <Checkbox 
                                 id="migrate" 
                                 checked={migrateLegacy}
                                 onCheckedChange={(checked) => setMigrateLegacy(checked as boolean)}
-                                className="data-[state=checked]:bg-emerald-500"
+                                className="data-[state=checked]:bg-emerald-500 w-4 h-4 border-white/20"
                              />
-                             <div className="grid gap-0.5 leading-none">
-                                <Label htmlFor="migrate" className="text-sm font-medium text-zinc-200 cursor-pointer">
-                                    {editingId ? "Resgatar transações órfãs" : "Definir como Principal"}
-                                </Label>
-                                <p className="text-[10px] text-zinc-500">
-                                    {editingId ? "Vincular transações 'sem carteira' a esta conta." : "Mover transações antigas para cá."}
-                                </p>
-                             </div>
+                             <Label htmlFor="migrate" className="text-xs font-medium text-zinc-300 cursor-pointer select-none">
+                                {editingId ? "Resgatar transações órfãs" : "Definir como Principal"}
+                             </Label>
                         </div>
                     </div>
                 </div>
 
                 <DialogFooter>
-                    <Button onClick={handleSave} disabled={isLoading} className="bg-emerald-500 hover:bg-emerald-600 text-black font-semibold w-full">
-                        {isLoading ? "Salvando..." : (editingId ? "Atualizar Carteira" : "Criar Carteira")}
+                    <Button onClick={handleSave} disabled={isLoading} className="bg-white text-black hover:bg-zinc-200 font-bold h-9 text-xs w-full rounded-xl">
+                        {isLoading ? "Salvando..." : (editingId ? "Atualizar" : "Criar")}
                     </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
 
-        {/* --- NOVO MODAL DE CONFIRMAÇÃO DE EXCLUSÃO --- */}
+        {/* --- MODAL DE EXCLUSÃO --- */}
         <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-            <DialogContent className="bg-zinc-950 border-white/10 text-zinc-100 sm:max-w-[425px]">
+            <DialogContent className="bg-zinc-950 border-white/10 text-zinc-100 sm:max-w-xs rounded-3xl">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-rose-500">
-                        <AlertTriangle size={20} />
+                    <DialogTitle className="flex items-center gap-2 text-rose-500 text-sm">
+                        <AlertTriangle size={16} />
                         Excluir Carteira
                     </DialogTitle>
-                    <DialogDescription className="text-zinc-400">
-                        Você está prestes a excluir <strong>{accountToDelete?.name}</strong>. Esta ação não pode ser desfeita.
+                    <DialogDescription className="text-xs text-zinc-400">
+                        Ação irreversível para <strong>{accountToDelete?.name}</strong>.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="py-4 space-y-4">
-                    {/* Alerta sobre transações vinculadas */}
-                    <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg">
-                        <p className="text-sm text-rose-200 font-medium flex items-center gap-2">
-                            <Trash2 size={16} />
-                            Status Atual:
-                        </p>
-                        <p className="text-xs text-rose-300/80 mt-1 pl-6">
-                            Esta carteira possui <strong>{accountToDelete?.transactionCount || 0} movimentações</strong> registradas.
+                <div className="py-2 space-y-3">
+                    <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg">
+                        <p className="text-[10px] text-rose-300">
+                           Esta carteira possui <strong>{accountToDelete?.transactionCount || 0} movimentações</strong>.
                         </p>
                     </div>
 
-                    {/* Checkbox de Decisão */}
-                    <div className="flex items-start gap-3 p-3 bg-zinc-900 border border-white/5 rounded-lg">
+                    <div className="flex items-start gap-2 p-2 bg-zinc-900 border border-white/5 rounded-lg">
                         <Checkbox 
                             id="delTrans" 
                             checked={deleteTransactions}
                             onCheckedChange={(c) => setDeleteTransactions(c as boolean)}
-                            className="mt-1 data-[state=checked]:bg-rose-500 data-[state=checked]:border-rose-500"
+                            className="mt-0.5 data-[state=checked]:bg-rose-500 border-white/20 w-4 h-4"
                         />
-                        <div className="grid gap-1.5 leading-none">
-                            <Label htmlFor="delTrans" className="text-sm font-medium text-zinc-200 cursor-pointer">
-                                Excluir também as transações?
+                        <div className="grid gap-0.5">
+                            <Label htmlFor="delTrans" className="text-xs font-medium text-zinc-200 cursor-pointer">
+                                Apagar transações?
                             </Label>
-                            <p className="text-xs text-zinc-500 leading-relaxed">
-                                <strong>Se marcado:</strong> Todo o histórico de gastos desta conta será apagado permanentemente.<br/>
-                                <strong>Se desmarcado:</strong> As transações serão mantidas, mas ficarão &quot;sem carteira&quot; (dinheiro vivo).
+                            <p className="text-[9px] text-zinc-500">
+                                Se desmarcado, elas ficarão &quot;sem carteira&quot;.
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <DialogFooter className="gap-2 sm:gap-0">
-                    <Button variant="ghost" onClick={() => setIsDeleteOpen(false)} className="hover:bg-zinc-900">
+                <DialogFooter className="flex gap-2 sm:gap-0">
+                    <Button variant="ghost" size="sm" onClick={() => setIsDeleteOpen(false)} className="h-8 text-xs hover:bg-zinc-900 rounded-lg">
                         Cancelar
                     </Button>
                     <Button 
+                        size="sm"
                         onClick={handleConfirmDelete} 
                         disabled={isLoading} 
-                        className="bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold h-8 text-xs rounded-lg"
                     >
-                        {isLoading ? "Processando..." : "Sim, Excluir Carteira"}
+                        {isLoading ? "..." : "Excluir"}
                     </Button>
                 </DialogFooter>
             </DialogContent>
