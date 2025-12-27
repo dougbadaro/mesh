@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { auth } from "@/auth";
 import { AppLayout } from "@/components/app-layout";
+import { Toaster } from "@/components/ui/sonner"; // <--- 1. IMPORTAÇÃO NOVA
 
 // Inter é a fonte mais próxima da San Francisco (Apple)
 const inter = Inter({ subsets: ["latin"] });
@@ -51,6 +52,10 @@ export default async function RootLayout({
         <AppLayout user={user}>
             {children}
         </AppLayout>
+        
+        {/* 2. COMPONENTE DE NOTIFICAÇÃO */}
+        {/* Ele fica aqui para flutuar sobre qualquer página */}
+        <Toaster theme="dark" /> 
       </body>
     </html>
   );

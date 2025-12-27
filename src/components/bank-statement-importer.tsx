@@ -12,8 +12,10 @@ import {
   Check,
   Calendar,
   CreditCard,
-  ArrowRight
+  ArrowRight,
+  AlertCircle // <--- Novo ícone
 } from "lucide-react"
+import { toast } from "sonner" // <--- Importação do Sonner
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -101,7 +103,11 @@ export function BankStatementImporter({ categories }: { categories: Category[] }
       processExcelData(jsonData);
     } catch (error) {
       console.error("Erro ao ler Excel:", error);
-      alert("Erro ao ler o arquivo.");
+      // TOAST DE ERRO
+      toast.error("Erro ao ler arquivo", {
+        description: "Certifique-se que é um arquivo .xlsx ou .csv válido.",
+        icon: <AlertCircle className="text-rose-500" />
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -178,7 +184,15 @@ export function BankStatementImporter({ categories }: { categories: Category[] }
   const handleSaveSelected = async () => {
     const selectedItems = parsedItems.filter(i => i.selected);
     const total = selectedItems.length;
-    if (total === 0) return;
+    
+    // VALIDAÇÃO COM TOAST
+    if (total === 0) {
+        toast.warning("Nenhum item selecionado", {
+            description: "Selecione pelo menos uma transação para importar."
+        });
+        return;
+    }
+
     setIsProcessing(true);
     setProgress(0);
     
@@ -207,6 +221,13 @@ export function BankStatementImporter({ categories }: { categories: Category[] }
         setStep("SUCCESS");
         setParsedItems([]);
         if (fileInputRef.current) fileInputRef.current.value = "";
+        
+        // TOAST DE SUCESSO FINAL
+        toast.success("Importação concluída", {
+            description: `${total} transações foram salvas com sucesso.`,
+            icon: <CheckCircle2 className="text-emerald-500" />
+        })
+
     }, 500);
   }
 

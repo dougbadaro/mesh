@@ -12,8 +12,10 @@ import {
   ArrowDownCircle,
   Calendar as CalendarIconLucide,
   Repeat,
-  Wallet 
+  Wallet,
+  Check // <--- Import Novo
 } from "lucide-react"
+import { toast } from "sonner" // <--- Import Novo
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -71,8 +73,18 @@ export function TransactionForm({ categories, accounts }: { categories: Category
   }
 
   async function handleSubmit(formData: FormData) {
+    if (amountValue <= 0) {
+        toast.warning("Valor inválido", {
+            description: "Informe um valor maior que zero."
+        })
+        return
+    }
+
     setIsPending(true)
     
+    // Captura da descrição para o Toast
+    const description = formData.get("description") as string
+
     formData.set('type', type)
     formData.set('paymentMethod', paymentMethod)
     formData.set('categoryId', categoryId === "general" ? "" : categoryId)
@@ -90,6 +102,12 @@ export function TransactionForm({ categories, accounts }: { categories: Category
     try {
       await createTransaction(formData)
       
+      // Toast de Sucesso
+      toast.success("Transação salva!", {
+        description: `${description} - ${amountDisplay}`,
+        icon: <Check className="text-emerald-500" />,
+      })
+      
       // Reset Total
       setIsRecurring(false)
       setIsInstallment(false)
@@ -105,6 +123,9 @@ export function TransactionForm({ categories, accounts }: { categories: Category
       
     } catch (error) {
       console.error("Erro ao criar transação", error)
+      toast.error("Erro ao salvar", {
+        description: "Tente novamente mais tarde."
+      })
     } finally {
       setIsPending(false)
     }
@@ -187,15 +208,15 @@ export function TransactionForm({ categories, accounts }: { categories: Category
                <div className="p-3 border-b border-white/5">
                  <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider pl-1">Descrição</Label>
                  <div className="relative mt-1">
-                    <div className="absolute left-3 top-2.5 text-zinc-500 group-focus-within:text-white transition-colors">
-                       <AlignLeft size={16} />
-                    </div>
-                    <Input 
-                      name="description" 
-                      placeholder="Ex: Netflix" 
-                      required 
-                      className="pl-10 bg-transparent border-none h-10 text-sm focus-visible:ring-0 placeholder:text-zinc-700"
-                    />
+                   <div className="absolute left-3 top-2.5 text-zinc-500 group-focus-within:text-white transition-colors">
+                      <AlignLeft size={16} />
+                   </div>
+                   <Input 
+                     name="description" 
+                     placeholder="Ex: Netflix" 
+                     required 
+                     className="pl-10 bg-transparent border-none h-10 text-sm focus-visible:ring-0 placeholder:text-zinc-700"
+                   />
                  </div>
                </div>
                

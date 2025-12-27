@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { 
@@ -28,7 +28,16 @@ interface MobileNavbarProps {
 
 export function MobileNavbar({ user }: MobileNavbarProps) {
   const [open, setOpen] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
   const pathname = usePathname()
+
+  // CORREÇÃO: setTimeout para evitar erro síncrono e garantir hidratação correta
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsMounted(true)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [])
 
   const routes = [
     { 
@@ -69,10 +78,12 @@ export function MobileNavbar({ user }: MobileNavbarProps) {
     },
   ]
 
+  // Impede renderização no servidor para evitar conflito de IDs (Hydration Mismatch)
+  if (!isMounted) return null
+
   return (
     <div className="md:hidden pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center pb-5">
       {/* Container Flutuante estilo Apple Dock */}
-      {/* Aumentei o max-w para acomodar mais ícones */}
       <div className="pointer-events-auto flex items-center gap-1 rounded-[2rem] border border-white/10 bg-zinc-900/80 p-2 shadow-2xl backdrop-blur-xl shadow-black/50 mx-2 w-auto max-w-full overflow-x-auto no-scrollbar justify-between">
         
         {/* Links de Navegação */}

@@ -39,126 +39,135 @@ export default async function Dashboard(props: DashboardProps) {
   const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999); 
   
   const monthName = startOfMonth.toLocaleString('pt-BR', { month: 'long' });
-  
   const isPastMonth = endOfMonth < now;
 
-  // 2. BUSCA DE CARTEIRAS
-  const rawBankAccounts = await prisma.bankAccount.findMany({
-    where: { userId: userId },
-    select: { id: true, name: true, type: true, color: true, includeInTotal: true, initialBalance: true }
-  });
+  // =================================================================================
+  // 🚀 OTIMIZAÇÃO MÁXIMA: UMA ÚNICA CHAMADA AO BANCO (Promise.all)
+  // Removemos todas as dependências. Buscamos tudo junto e filtramos na memória.
+  // =================================================================================
+  
+  const [
+    rawBankAccounts, 
+    rawCategories, 
+    balanceAggregations, 
+    allMonthlyTransactions, 
+    futureCardTransactions
+  ] = await Promise.all([
+    
+    // 1. Contas
+    prisma.bankAccount.findMany({
+      where: { userId: userId },
+      select: { id: true, name: true, type: true, color: true, includeInTotal: true, initialBalance: true }
+    }),
 
+    // 2. Categorias
+    prisma.category.findMany({
+      where: { OR: [{ userId: userId }, { userId: null }] }
+    }),
+
+    // 3. Saldo Total (Agregado)
+    prisma.transaction.groupBy({
+        by: ['bankAccountId', 'type'],
+        _sum: { amount: true },
+        where: { 
+          userId: userId,
+          date: { lte: endOfMonth },
+          paymentMethod: { not: 'CREDIT_CARD' }
+        }
+    }),
+
+    // 4. Transações do Mês (Trazemos todas, filtramos ocultas depois)
+    prisma.transaction.findMany({
+        where: {
+            userId: userId,
+            date: { gte: startOfMonth, lte: endOfMonth },
+        },
+        orderBy: { date: 'desc' }, 
+        include: { 
+            category: true,
+            bankAccount: { select: { name: true, color: true } }
+        }
+    }),
+
+    // 5. Widget Cartão
+    prisma.transaction.findMany({
+        where: { 
+            userId: userId,
+            date: { gte: startOfMonth },
+            paymentMethod: 'CREDIT_CARD',
+        },
+        select: {
+            id: true, description: true, amount: true, date: true, dueDate: true, paymentMethod: true
+        },
+        orderBy: { date: 'asc' }
+    })
+  ]);
+
+  // --- PROCESSAMENTO EM MEMÓRIA (Muito mais rápido que DB) ---
+
+  // Sanitiza Contas
   const bankAccounts = rawBankAccounts.map(acc => ({
     ...acc,
     initialBalance: Number(acc.initialBalance)
   }));
 
-  const hiddenAccountIds = bankAccounts
-    .filter(acc => !acc.includeInTotal)
-    .map(acc => acc.id);
+  // Identifica contas ocultas
+  const hiddenAccountIds = new Set(
+    bankAccounts.filter(acc => !acc.includeInTotal).map(acc => acc.id)
+  );
 
-  const initialBalanceSum = bankAccounts
-    .filter(acc => acc.includeInTotal)
-    .reduce((sum, acc) => sum + Number(acc.initialBalance), 0);
+  // Filtra as transações do mês (removendo as de contas ocultas)
+  const monthlyTransactions = allMonthlyTransactions.filter(t => 
+    !t.bankAccountId || !hiddenAccountIds.has(t.bankAccountId)
+  );
 
-  // 3. BUSCA DE DADOS
-  const [cashTransactions, monthlyTransactions, allFutureTransactions, rawCategories] = await Promise.all([
-    // A. Histórico (para calcular saldo acumulado)
-    prisma.transaction.findMany({
-      where: { 
-        userId: userId,
-        paymentMethod: { not: 'CREDIT_CARD' }, 
-      },
-      select: { id: true, amount: true, type: true, date: true, bankAccountId: true },
-      orderBy: { date: 'asc' }
-    }),
-
-    // B. Mês Atual (para exibir na lista e gráficos)
-    prisma.transaction.findMany({
-      where: {
-        userId: userId,
-        date: { gte: startOfMonth, lte: endOfMonth },
-        bankAccountId: { notIn: hiddenAccountIds }
-      },
-      orderBy: { date: 'desc' }, 
-      include: { 
-          category: true,
-          bankAccount: { select: { name: true, color: true } }
-      }
-    }),
-
-    // C. Futuro (para o Widget de Cartão)
-    prisma.transaction.findMany({
-      where: { 
-        userId: userId,
-        date: { gte: startOfMonth },
-        bankAccountId: { notIn: hiddenAccountIds }
-      }, 
-      include: { category: true }
-    }),
-
-    // D. Categorias (para formulários)
-    prisma.category.findMany({
-      where: { OR: [{ userId: userId }, { userId: null }] }
-    })
-  ]);
-
-  // 4. SANITIZAÇÃO (Crucial para evitar erros de Decimal no client)
+  // Sanitiza Categorias
   const categories = rawCategories.map(cat => ({
     ...cat,
     budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null
   }));
 
-  // 5. CÁLCULO DE SALDOS
-  let currentBalance = initialBalanceSum;   
-  let startingBalance = initialBalanceSum;
-  
-  const cutoffTime = endOfMonth.getTime();
-  const startTime = startOfMonth.getTime();
-
-  const accountsWithBalance = bankAccounts.map(acc => ({
-      ...acc,
-      currentBalance: Number(acc.initialBalance)
-  }));
-
-  cashTransactions.forEach(t => {
-      const tDate = new Date(t.date).getTime();
-      const val = Number(t.amount);
-      const isIncome = t.type === TransactionType.INCOME;
-
-      // Atualiza saldo individual de cada conta
-      if (t.bankAccountId) {
-          const accIndex = accountsWithBalance.findIndex(a => a.id === t.bankAccountId);
-          if (accIndex >= 0) {
-              if (tDate <= cutoffTime) {
-                  if (isIncome) accountsWithBalance[accIndex].currentBalance += val;
-                  else accountsWithBalance[accIndex].currentBalance -= val;
-              }
-          }
-      }
-
-      // Atualiza saldo geral
-      const isVisible = !t.bankAccountId || !hiddenAccountIds.includes(t.bankAccountId);
-      if (isVisible) {
-          if (tDate < startTime) {
-             if (isIncome) startingBalance += val;
-             else startingBalance -= val;
-          }
-
-          if (tDate <= cutoffTime) {
-             if (isIncome) currentBalance += val;
-             else currentBalance -= val;
-          }
-      }
+  // Mapa de Saldos Agregados
+  const totalsMap: Record<string, number> = {};
+  balanceAggregations.forEach(agg => {
+     if (agg.bankAccountId) {
+        const key = `${agg.bankAccountId}_${agg.type}`;
+        totalsMap[key] = Number(agg._sum.amount || 0);
+     }
   });
 
-  // 6. PREPARAÇÃO DE DADOS VISUAIS
+  // Monta objeto de contas com saldo
+  const accountsWithBalance = bankAccounts.map(acc => {
+      const totalIncome = totalsMap[`${acc.id}_${TransactionType.INCOME}`] || 0;
+      const totalExpense = totalsMap[`${acc.id}_${TransactionType.EXPENSE}`] || 0;
+      return {
+          ...acc,
+          currentBalance: acc.initialBalance + totalIncome - totalExpense
+      };
+  });
+
+  // KPI: Saldo Atual
+  const currentBalance = accountsWithBalance
+    .filter(acc => acc.includeInTotal)
+    .reduce((sum, acc) => sum + acc.currentBalance, 0);
+
+  // KPI: Fluxo do Mês
+  const monthIncome = monthlyTransactions
+    .filter(t => t.type === TransactionType.INCOME)
+    .reduce((acc, t) => acc + Number(t.amount), 0);
+
+  const monthExpense = monthlyTransactions
+    .filter(t => t.type === TransactionType.EXPENSE)
+    .reduce((acc, t) => acc + Number(t.amount), 0);
+  
+  const startingBalance = currentBalance - monthIncome + monthExpense;
+
+  // Listas de Visualização
   const listItemsNonCredit = monthlyTransactions
     .filter(t => t.paymentMethod !== 'CREDIT_CARD')
     .map(t => ({ 
         ...t, 
         amount: Number(t.amount),
-        // CORREÇÃO DECIMAL: Recriamos o objeto category sanitizado
         category: t.category ? {
             ...t.category,
             budgetLimit: t.category.budgetLimit ? Number(t.category.budgetLimit) : null
@@ -168,14 +177,7 @@ export default async function Dashboard(props: DashboardProps) {
   const listItemsCredit = monthlyTransactions.filter(t => t.paymentMethod === 'CREDIT_CARD');
   const monthlyInvoiceTotal = listItemsCredit.reduce((acc, t) => acc + Number(t.amount), 0);
 
-  const monthIncome = monthlyTransactions
-    .filter(t => t.type === TransactionType.INCOME)
-    .reduce((acc, t) => acc + Number(t.amount), 0);
-
-  const monthExpense = monthlyTransactions
-    .filter(t => t.type === TransactionType.EXPENSE)
-    .reduce((acc, t) => acc + Number(t.amount), 0);
-
+  // Gráficos
   const chartData: ChartData[] = [...monthlyTransactions]
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .map(t => ({
@@ -185,12 +187,13 @@ export default async function Dashboard(props: DashboardProps) {
       categoryName: t.category?.name
     }));
 
-  const widgetData = allFutureTransactions.map(t => ({
+  // Widget
+  const widgetData = futureCardTransactions.map(t => ({
     id: t.id,
     description: t.description,
     amount: Number(t.amount),
     date: t.date,      
-    dueDate: t.dueDate, 
+    dueDate: t.dueDate!, 
     paymentMethod: t.paymentMethod
   }));
 
@@ -212,10 +215,9 @@ export default async function Dashboard(props: DashboardProps) {
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         
-        {/* COLUNA ESQUERDA (Principal) */}
+        {/* COLUNA ESQUERDA */}
         <div className="xl:col-span-8 space-y-6">
           
-          {/* CARDS DE KPI */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             {/* CARD SALDO */}
@@ -271,9 +273,8 @@ export default async function Dashboard(props: DashboardProps) {
                       </h3>
                     </div>
                     
-                    {/* Botão Pagar Fatura com a lógica nova */}
                     <PayInvoiceDialog 
-                        key={monthName} // Reseta o estado se o mês mudar
+                        key={monthName}
                         invoiceTotal={monthlyInvoiceTotal}
                         accounts={accountsWithBalance}
                         monthName={monthName}
@@ -305,7 +306,7 @@ export default async function Dashboard(props: DashboardProps) {
              </CardContent>
           </Card>
 
-          {/* LISTA DE TRANSAÇÕES */}
+          {/* LISTA */}
           <div className="space-y-3">
               <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-2">
                 Últimas Movimentações
@@ -320,7 +321,6 @@ export default async function Dashboard(props: DashboardProps) {
                 ) : (
                    <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto custom-scrollbar">
                       
-                      {/* Resumo da Fatura na Lista */}
                       {monthlyInvoiceTotal > 0 && (
                           <div className="flex items-center justify-between p-3 px-5 bg-rose-500/5 border-l-2 border-rose-500/50">
                              <div className="flex items-center gap-3">
@@ -340,7 +340,6 @@ export default async function Dashboard(props: DashboardProps) {
                           </div>
                        )}
 
-                       {/* Itens Individuais */}
                        {listItemsNonCredit.map((t) => (
                            <EditTransactionSheet 
                               key={t.id} 
@@ -349,14 +348,14 @@ export default async function Dashboard(props: DashboardProps) {
                               transaction={{
                                 id: t.id,
                                 description: t.description,
-                                amount: t.amount, // Já é number
+                                amount: t.amount,
                                 date: t.date,
                                 type: t.type,
                                 paymentMethod: t.paymentMethod,
                                 categoryId: t.categoryId,
                                 bankAccountId: t.bankAccountId,
                                 dueDate: t.date,
-                                category: t.category // Já sanitizado acima
+                                category: t.category
                               }}
                            >
                             <div className="w-full flex items-center justify-between p-3 px-5 hover:bg-white/5 transition duration-200 group cursor-pointer">
@@ -386,7 +385,7 @@ export default async function Dashboard(props: DashboardProps) {
           </div>
         </div>
 
-        {/* COLUNA DIREITA (Widgets) */}
+        {/* COLUNA DIREITA */}
         <div className="xl:col-span-4 space-y-6">
            <BankAccountsWidget accounts={accountsWithBalance} />
            
@@ -408,7 +407,6 @@ export default async function Dashboard(props: DashboardProps) {
                </Tabs>
            </Card>
 
-           {/* Widget com contas passadas para permitir pagamento */}
            <CreditCardWidget 
               transactions={widgetData} 
               accounts={accountsWithBalance} 

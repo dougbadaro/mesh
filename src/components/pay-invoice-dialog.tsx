@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { payInvoice } from "@/app/actions/pay-invoice"
 import { Wallet, CalendarIcon, Loader2, CheckCircle2, AlertCircle, Building2 } from "lucide-react"
+import { toast } from "sonner" // <--- IMPORTAÇÃO DO SONNER
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter
 } from "@/components/ui/dialog"
 import {
   Select,
@@ -49,7 +49,13 @@ export function PayInvoiceDialog({ invoiceTotal, accounts, monthName }: PayInvoi
   }
 
   const handlePay = async () => {
-    if (!selectedAccount) return
+    // Validação com Toast
+    if (!selectedAccount) {
+        toast.warning("Selecione uma conta", {
+            description: "Você precisa informar de onde o dinheiro vai sair."
+        })
+        return
+    }
 
     setIsLoading(true)
     const formData = new FormData()
@@ -64,9 +70,16 @@ export function PayInvoiceDialog({ invoiceTotal, accounts, monthName }: PayInvoi
 
     if (result.success) {
         setOpen(false)
-        alert("Pagamento registrado com sucesso!")
+        // Sucesso com Toast
+        toast.success("Pagamento realizado!", {
+            description: `Valor de ${amountDisplay} debitado com sucesso.`,
+            duration: 4000,
+        })
     } else {
-        alert("Erro ao registrar pagamento.")
+        // Erro com Toast
+        toast.error("Erro ao pagar", {
+            description: "Não foi possível registrar o pagamento. Tente novamente."
+        })
     }
   }
 
@@ -105,7 +118,7 @@ export function PayInvoiceDialog({ invoiceTotal, accounts, monthName }: PayInvoi
 
         <div className="p-6 space-y-6">
             
-            {/* SEÇÃO DE VALOR (IGUAL AO REFERENCE) */}
+            {/* SEÇÃO DE VALOR */}
             <div className="flex flex-col items-center justify-center gap-1">
                 <div className="relative w-full text-center">
                     <Input 
@@ -121,7 +134,7 @@ export function PayInvoiceDialog({ invoiceTotal, accounts, monthName }: PayInvoi
                 </div>
             </div>
 
-            {/* CONTAINER DE CAMPOS (IGUAL AO REFERENCE) */}
+            {/* CONTAINER DE CAMPOS */}
             <div className="bg-zinc-900/30 backdrop-blur-md rounded-2xl border border-white/5 overflow-hidden">
                 
                 {/* CONTA */}
@@ -169,7 +182,7 @@ export function PayInvoiceDialog({ invoiceTotal, accounts, monthName }: PayInvoi
 
             </div>
 
-            {/* AVISO DE SALDO (FORA DO GRUPO) */}
+            {/* AVISO DE SALDO */}
             {!hasBalance && selectedAccount && (
                 <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
                     <AlertCircle className="text-rose-500 shrink-0" size={16} />
@@ -181,7 +194,7 @@ export function PayInvoiceDialog({ invoiceTotal, accounts, monthName }: PayInvoi
 
         </div>
 
-        {/* FOOTER (IGUAL AO REFERENCE) */}
+        {/* FOOTER */}
         <div className="p-6 pt-2 bg-zinc-900/30 border-t border-white/5">
              <Button 
                 onClick={handlePay} 

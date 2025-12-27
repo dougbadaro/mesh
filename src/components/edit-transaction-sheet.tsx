@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { updateTransaction, deleteTransaction } from "@/app/actions/transactions"
-import { Trash2, CalendarIcon, Tag, CreditCard, AlignLeft, ArrowUpCircle, ArrowDownCircle, Wallet, Loader2 } from "lucide-react"
+import { Trash2, CalendarIcon, Tag, CreditCard, AlignLeft, ArrowUpCircle, ArrowDownCircle, Wallet, Loader2, Check } from "lucide-react"
+import { toast } from "sonner" // <--- Import Novo
 
 import {
   Sheet,
@@ -49,7 +50,6 @@ interface TransactionProps {
   paymentMethod: string
   categoryId?: string | null
   bankAccountId?: string | null
-  // Adicione dueDate aqui para compatibilidade com o componente pai, mesmo que não editado
   dueDate?: Date | null
   category?: { name: string } | null
 }
@@ -102,16 +102,42 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
     formData.set('bankAccountId', bankAccountId === "none" ? "" : bankAccountId)
 
     await updateTransaction(formData)
+    
+    // Toast Sucesso
+    toast.success("Transação atualizada!", {
+        description: "As alterações foram salvas com sucesso.",
+        icon: <Check className="text-emerald-500" />
+    })
+
     setIsPending(false)
     setOpen(false)
   }
 
-  const handleDelete = async () => {
-    if (!confirm("Deseja realmente excluir esta transação?")) return
+  // Lógica de Exclusão Elegante (Toast com Ação)
+  const handleDeleteRequest = () => {
+    toast("Excluir transação?", {
+        description: "Essa ação não pode ser desfeita.",
+        action: {
+            label: "Confirmar Exclusão",
+            onClick: () => performDelete()
+        },
+        cancel: {
+            label: "Cancelar",
+            onClick: () => {}
+        },
+        duration: 5000, // Dá tempo de pensar
+    })
+  }
+
+  const performDelete = async () => {
     setIsPending(true)
     const formData = new FormData()
     formData.set('id', transaction.id)
+    
     await deleteTransaction(formData)
+    
+    toast.success("Transação excluída")
+    
     setIsPending(false)
     setOpen(false)
   }
@@ -295,11 +321,12 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
               <Button 
                 type="button" 
                 disabled={isPending}
-                onClick={handleDelete}
+                onClick={handleDeleteRequest}
                 variant="outline" 
-                className="w-full sm:w-auto h-12 w-12 border-red-500/20 bg-red-500/5 text-red-500 hover:bg-red-500/10 hover:border-red-500/30 rounded-xl p-0 flex items-center justify-center"
+                className="w-full sm:w-auto h-12 min-w-[3rem] border-red-500/20 bg-red-500/5 text-red-500 hover:bg-red-500/10 hover:border-red-500/30 rounded-xl flex items-center justify-center gap-2"
               >
                  <Trash2 size={18} />
+                 <span className="sm:hidden font-bold">Excluir</span>
               </Button>
           </SheetFooter>
         </form>
