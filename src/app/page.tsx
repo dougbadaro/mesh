@@ -1,5 +1,4 @@
-// Importamos os tipos gerados pelo Prisma
-import { BankAccount, Category, Transaction, TransactionType } from "@prisma/client"
+import { TransactionType } from "@prisma/client"
 import { Activity, ArrowDownLeft, ArrowUpRight, Receipt, TrendingUp, Wallet } from "lucide-react"
 
 import { BankAccountsWidget } from "@/components/bank-accounts-widget"
@@ -13,86 +12,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 import { getAuthenticatedUser } from "@/lib/auth-check"
 import { prisma } from "@/lib/prisma"
+import {
+  SafeAccount,
+  SafeCategory,
+  SafeTransaction,
+  toSafeTransaction,
+} from "@/lib/transformers"
 
 interface DashboardProps {
   searchParams: Promise<{ month?: string; year?: string }>
-}
-
-// --- 1. DEFINIÇÃO DE CONTRATOS DE DADOS (SERIALIZADOS) ---
-
-// Tipo auxiliar para o que vem do Prisma (com relacionamentos)
-type TransactionWithRelations = Transaction & {
-  category: Category | null
-  bankAccount: BankAccount | null
-}
-
-// SafeCategory: O que viaja do Server pro Client (JSON)
-export interface SafeCategory {
-  id: string
-  name: string
-  type: string
-  userId: string | null
-  budgetLimit: number | null
-  createdAt: string // ISO String
-  updatedAt: string // ISO String
-}
-
-// SafeAccount: O que viaja do Server pro Client (JSON)
-export interface SafeAccount {
-  id: string
-  name: string
-  type: string
-  color: string | null
-  initialBalance: number
-  includeInTotal: boolean
-}
-
-// SafeTransaction: O que viaja do Server pro Client (JSON)
-export interface SafeTransaction {
-  id: string
-  description: string
-  amount: number
-  type: TransactionType
-  paymentMethod: string
-  date: string // ISO String
-  dueDate: string | null // ISO String
-  categoryId: string | null
-  bankAccountId: string | null
-  category: SafeCategory | null
-  bankAccount: { name: string; color: string | null } | null
-}
-
-// --- 2. FUNÇÃO DE CONVERSÃO (SERIALIZER) ---
-// Converte os tipos complexos do Prisma (Decimal, Date) para primitivos (number, string)
-const toClientTransaction = (t: TransactionWithRelations): SafeTransaction => {
-  return {
-    id: t.id,
-    description: t.description,
-    amount: Number(t.amount), // Decimal -> Number
-    type: t.type,
-    paymentMethod: t.paymentMethod,
-    date: t.date.toISOString(), // Date -> String
-    dueDate: t.dueDate ? t.dueDate.toISOString() : null,
-    categoryId: t.categoryId,
-    bankAccountId: t.bankAccountId,
-    category: t.category
-      ? {
-          id: t.category.id,
-          name: t.category.name,
-          type: t.category.type,
-          userId: t.category.userId,
-          budgetLimit: t.category.budgetLimit ? Number(t.category.budgetLimit) : null,
-          createdAt: t.category.createdAt.toISOString(),
-          updatedAt: t.category.updatedAt.toISOString(),
-        }
-      : null,
-    bankAccount: t.bankAccount
-      ? {
-          name: t.bankAccount.name,
-          color: t.bankAccount.color,
-        }
-      : null,
-  }
 }
 
 export default async function Dashboard(props: DashboardProps) {
@@ -149,7 +77,7 @@ export default async function Dashboard(props: DashboardProps) {
       orderBy: { date: "desc" },
       include: {
         category: true,
-        bankAccount: true, // Incluindo tudo para satisfazer TransactionWithRelations
+        bankAccount: true,
       },
     }),
     prisma.transaction.findMany({
@@ -170,8 +98,6 @@ export default async function Dashboard(props: DashboardProps) {
     }),
   ])
 
-  // --- PROCESSAMENTO DE DADOS ---
-
   const bankAccounts = rawBankAccounts.map((acc) => ({
     ...acc,
     initialBalance: Number(acc.initialBalance),
@@ -187,7 +113,6 @@ export default async function Dashboard(props: DashboardProps) {
     updatedAt: cat.updatedAt.toISOString(),
   }))
 
-  // Mapeamos para SafeAccount para passar ao TransactionList
   const safeAccounts: SafeAccount[] = bankAccounts.map((acc) => ({
     ...acc,
     initialBalance: Number(acc.initialBalance),
@@ -232,12 +157,9 @@ export default async function Dashboard(props: DashboardProps) {
 
   const startingBalance = currentBalance - monthIncome + monthExpense
 
-  // --- SEPARAÇÃO E CONVERSÃO FINAL ---
-
-  // 🟢 Lista Segura: Tipagem SafeTransaction[] garantida
   const listItemsNonCredit: SafeTransaction[] = monthlyTransactions
     .filter((t) => t.paymentMethod !== "CREDIT_CARD")
-    .map(toClientTransaction)
+    .map(toSafeTransaction)
 
   const listItemsCredit = monthlyTransactions.filter((t) => t.paymentMethod === "CREDIT_CARD")
   const monthlyInvoiceTotal = listItemsCredit.reduce((acc, t) => acc + Number(t.amount), 0)
@@ -264,7 +186,7 @@ export default async function Dashboard(props: DashboardProps) {
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
 
   return (
-    <div className="space-y-6 pb-20 duration-700 animate-in fade-in md:pb-0">
+    <div className="animate-in fade-in space-y-6 pb-20 duration-700 md:pb-0">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white">Visão Geral</h1>
@@ -277,11 +199,9 @@ export default async function Dashboard(props: DashboardProps) {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-        {/* COLUNA ESQUERDA */}
         <div className="space-y-6 xl:col-span-8">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {/* SALDO */}
-            <Card className="group relative overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-lg shadow-none shadow-black/5 backdrop-blur-xl">
+            <Card className="group relative overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-lg shadow-black/5 backdrop-blur-xl">
               <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
               <CardContent className="relative p-5">
                 <div className="mb-3 flex items-start justify-between">
@@ -334,8 +254,7 @@ export default async function Dashboard(props: DashboardProps) {
               </CardContent>
             </Card>
 
-            {/* FATURA */}
-            <Card className="group relative overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-lg shadow-none shadow-black/5 backdrop-blur-xl">
+            <Card className="group relative overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-lg shadow-black/5 backdrop-blur-xl">
               <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
               <CardContent className="relative flex h-full flex-col justify-between p-5">
                 <div className="flex items-start justify-between">
@@ -364,7 +283,7 @@ export default async function Dashboard(props: DashboardProps) {
             </Card>
           </div>
 
-          <Card className="overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-lg shadow-none shadow-black/5 backdrop-blur-xl">
+          <Card className="overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-lg shadow-black/5 backdrop-blur-xl">
             <CardHeader className="border-b border-white/5 px-6 py-4">
               <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-400">
                 <TrendingUp size={14} /> Fluxo de Caixa
@@ -377,7 +296,6 @@ export default async function Dashboard(props: DashboardProps) {
             </CardContent>
           </Card>
 
-          {/* LISTA DE TRANSAÇÕES */}
           <div className="space-y-3">
             <h3 className="px-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
               Últimas Movimentações
@@ -403,7 +321,6 @@ export default async function Dashboard(props: DashboardProps) {
                 </div>
               )}
 
-              {/* COMPONENTE CLIENTE COM TIPOS SEGUROS */}
               <TransactionList
                 transactions={listItemsNonCredit}
                 categories={categories}
@@ -413,11 +330,10 @@ export default async function Dashboard(props: DashboardProps) {
           </div>
         </div>
 
-        {/* COLUNA DIREITA */}
         <div className="space-y-6 xl:col-span-4">
           <BankAccountsWidget accounts={accountsWithBalance} />
 
-          <Card className="overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 p-1 shadow-lg shadow-none backdrop-blur-xl">
+          <Card className="overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 p-1 shadow-lg shadow-black/5 backdrop-blur-xl">
             <DashboardTabs categories={categories} accounts={bankAccounts} />
           </Card>
 

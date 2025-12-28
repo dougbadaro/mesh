@@ -1,44 +1,11 @@
 "use client"
 
 import { useMemo } from "react"
-import { TransactionType } from "@prisma/client"
 import { ArrowDownLeft, ArrowUpRight, CreditCard, Pencil } from "lucide-react"
 
 import { EditTransactionSheet } from "@/components/edit-transaction-sheet"
 
-// --- 1. DEFINIÇÃO DO QUE VEM DO SERVIDOR (STRINGS) ---
-export interface SafeCategory {
-  id: string
-  name: string
-  type: string
-  userId: string | null
-  budgetLimit: number | null
-  createdAt: string
-  updatedAt: string
-}
-
-export interface SafeAccount {
-  id: string
-  name: string
-  type: string
-  color: string | null
-  initialBalance: number
-  includeInTotal: boolean
-}
-
-export interface SafeTransaction {
-  id: string
-  description: string
-  amount: number
-  type: TransactionType
-  paymentMethod: string
-  date: string // ISO String
-  dueDate: string | null
-  categoryId: string | null
-  bankAccountId: string | null
-  category: SafeCategory | null
-  bankAccount: { name: string; color: string | null } | null
-}
+import { SafeAccount, SafeCategory, SafeTransaction } from "@/lib/transformers"
 
 interface TransactionsTableProps {
   transactions: SafeTransaction[]
@@ -47,7 +14,6 @@ interface TransactionsTableProps {
 }
 
 export function TransactionsTable({ transactions, categories, accounts }: TransactionsTableProps) {
-  // 🟢 1. CONVERSÃO DE DADOS GLOBAIS (String -> Date)
   const richCategories = useMemo(() => {
     return categories.map((cat) => ({
       ...cat,
@@ -74,7 +40,6 @@ export function TransactionsTable({ transactions, categories, accounts }: Transa
   return (
     <div className="divide-y divide-white/5">
       {transactions.map((t) => {
-        // 🟢 2. CONVERSÃO INDIVIDUAL (String -> Date)
         const richTransaction = {
           id: t.id,
           description: t.description,
@@ -95,13 +60,11 @@ export function TransactionsTable({ transactions, categories, accounts }: Transa
             categories={richCategories}
             accounts={richAccounts}
           >
-            {/* O CONTEÚDO CLICÁVEL (TRIGGER) */}
             <div
               className="group relative flex w-full cursor-pointer flex-col items-center gap-2 p-4 px-6 outline-none transition-colors hover:bg-white/[0.03] md:grid md:grid-cols-12 md:gap-4"
               role="button"
               tabIndex={0}
             >
-              {/* COLUNA DESCRIÇÃO (5 cols) */}
               <div className="col-span-5 flex w-full items-center gap-4 text-left">
                 <div
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
@@ -127,12 +90,10 @@ export function TransactionsTable({ transactions, categories, accounts }: Transa
                 </div>
               </div>
 
-              {/* COLUNA DATA (2 cols) */}
               <div className="col-span-2 hidden text-left font-mono text-xs text-zinc-400 md:block">
                 <span suppressHydrationWarning>{formatDate(t.date)}</span>
               </div>
 
-              {/* COLUNA CATEGORIA E CONTA (2 cols) */}
               <div className="col-span-2 hidden text-left md:block">
                 <div className="flex flex-col items-start gap-1">
                   {t.category ? (
@@ -158,9 +119,6 @@ export function TransactionsTable({ transactions, categories, accounts }: Transa
                 </div>
               </div>
 
-              {/* COLUNA VALOR (3 cols) */}
-              {/* 🟢 CORREÇÃO: Adicionei 'md:pr-8' (padding-right) para empurrar o texto
-                    para a esquerda, criando espaço para o ícone de lápis aparecer sem cobrir o valor. */}
               <div className="col-span-3 flex w-full flex-row items-center justify-between gap-0.5 md:flex-col md:items-end md:pr-8">
                 <p
                   className={`text-sm font-bold tabular-nums ${t.type === "INCOME" ? "text-emerald-400" : "text-zinc-200"}`}
@@ -173,7 +131,6 @@ export function TransactionsTable({ transactions, categories, accounts }: Transa
                 </div>
               </div>
 
-              {/* ÍCONE DE EDIÇÃO HOVER (Desktop) */}
               <div className="absolute right-4 top-1/2 hidden -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 md:block">
                 <div className="rounded-full bg-white/10 p-1.5 text-white backdrop-blur-md">
                   <Pencil size={12} />

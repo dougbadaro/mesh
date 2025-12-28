@@ -1,4 +1,4 @@
-import { BankAccount, Category, Prisma, Transaction, TransactionType } from "@prisma/client"
+import { Prisma, TransactionType } from "@prisma/client"
 import { ArrowLeft, ChevronLeft, ChevronRight, SearchX } from "lucide-react"
 import Link from "next/link"
 
@@ -6,15 +6,15 @@ import { Button } from "@/components/ui/button"
 
 import { getAuthenticatedUser } from "@/lib/auth-check"
 import { prisma } from "@/lib/prisma"
-
-import { TransactionFilters } from "./components/transaction-filters"
-// 🟢 IMPORTAÇÕES: Tipos seguros do componente e tipos do Prisma
 import {
   SafeAccount,
   SafeCategory,
   SafeTransaction,
-  TransactionsTable,
-} from "./components/transactions-table"
+  toSafeTransaction,
+} from "@/lib/transformers"
+
+import { TransactionFilters } from "./components/transaction-filters"
+import { TransactionsTable } from "./components/transactions-table"
 
 interface TransactionsPageProps {
   searchParams: Promise<{
@@ -26,49 +26,10 @@ interface TransactionsPageProps {
   }>
 }
 
-// 🟢 TIPO INTERMEDIÁRIO (O que vem do Banco de Dados)
-type TransactionWithRelations = Transaction & {
-  category: Category | null
-  bankAccount: BankAccount | null
-}
-
-// 🔧 FUNÇÃO DE LIMPEZA (SERIALIZER)
-const toClientTransaction = (t: TransactionWithRelations): SafeTransaction => {
-  return {
-    id: t.id,
-    description: t.description,
-    amount: Number(t.amount), // Converte Decimal do Prisma para Number
-    type: t.type,
-    paymentMethod: t.paymentMethod,
-    date: t.date.toISOString(), // Converte Date para String ISO
-    dueDate: t.dueDate ? t.dueDate.toISOString() : null,
-    categoryId: t.categoryId,
-    bankAccountId: t.bankAccountId,
-    category: t.category
-      ? {
-          id: t.category.id,
-          name: t.category.name,
-          type: t.category.type,
-          userId: t.category.userId,
-          budgetLimit: t.category.budgetLimit ? Number(t.category.budgetLimit) : null,
-          createdAt: t.category.createdAt.toISOString(),
-          updatedAt: t.category.updatedAt.toISOString(),
-        }
-      : null,
-    bankAccount: t.bankAccount
-      ? {
-          name: t.bankAccount.name,
-          color: t.bankAccount.color,
-        }
-      : null,
-  }
-}
-
 export default async function TransactionsPage(props: TransactionsPageProps) {
   const user = await getAuthenticatedUser()
   const searchParams = await props.searchParams
 
-  // --- CONFIGURAÇÃO ---
   const query = searchParams?.query || ""
   const rawType = searchParams?.type
   const bankId = searchParams?.bankId
@@ -81,7 +42,6 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
   const currentPage = Number(searchParams?.page) || 1
   const itemsPerPage = 15
 
-  // --- LÓGICA DE DATA ---
   let dateFilter: Prisma.DateTimeFilter | undefined = undefined
   if (!showFuture) {
     const now = new Date()
@@ -89,7 +49,6 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
     dateFilter = { lte: endOfMonth }
   }
 
-  // --- WHERE CONDITION ---
   const whereCondition: Prisma.TransactionWhereInput = {
     userId: user.id,
     description: {
@@ -101,7 +60,6 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
     ...(bankId && { bankAccountId: bankId }),
   }
 
-  // --- BUSCA PARALELA NO BANCO ---
   const [totalItems, rawTransactions, rawCategories, rawAccounts] = await Promise.all([
     prisma.transaction.count({ where: whereCondition }),
     prisma.transaction.findMany({
@@ -132,8 +90,6 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
 
   const totalPages = Math.ceil(totalItems / itemsPerPage)
 
-  // --- SANITIZAÇÃO DE DADOS (Server -> Client) ---
-
   const categories: SafeCategory[] = rawCategories.map((cat) => ({
     id: cat.id,
     name: cat.name,
@@ -149,11 +105,10 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
     initialBalance: Number(acc.initialBalance),
   }))
 
-  const transactions: SafeTransaction[] = rawTransactions.map(toClientTransaction)
+  const transactions: SafeTransaction[] = rawTransactions.map(toSafeTransaction)
 
   return (
     <main className="mx-auto max-w-6xl p-4 pb-24 duration-700 animate-in fade-in md:p-6">
-      {/* HEADER */}
       <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div className="flex items-center gap-3">
           <Button
@@ -175,28 +130,22 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
         </div>
       </div>
 
-      {/* FILTROS */}
       <TransactionFilters accounts={accounts} />
 
-      {/* ÁREA DA TABELA */}
       <div className="mt-6 overflow-hidden rounded-3xl border border-white/5 bg-zinc-900/40 shadow-sm backdrop-blur-xl">
-        {/* Cabeçalho Visual da Tabela */}
         <div className="hidden grid-cols-12 gap-4 border-b border-white/5 bg-white/[0.02] px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 md:grid">
           <div className="col-span-5">Descrição</div>
           <div className="col-span-2">Data</div>
           <div className="col-span-2">Categoria / Conta</div>
-          {/* 🟢 CORREÇÃO: md:pr-8 alinha o título com os valores das linhas */}
           <div className="col-span-3 text-right md:pr-8">Valor</div>
         </div>
 
-        {/* Lista de Transações */}
         {transactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-24 text-zinc-500">
             <SearchX size={32} className="opacity-30" />
             <p className="text-xs">Nenhum resultado.</p>
           </div>
         ) : (
-          /* COMPONENTE DE TABELA (Client Component) */
           <TransactionsTable
             transactions={transactions}
             categories={categories}
@@ -205,7 +154,6 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
         )}
       </div>
 
-      {/* PAGINAÇÃO */}
       {totalPages > 1 && (
         <div className="mt-6 flex items-center justify-center gap-1">
           <Button
