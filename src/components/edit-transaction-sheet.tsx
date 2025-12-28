@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { updateTransaction, deleteTransaction } from "@/app/actions/transactions"
 import { Trash2, CalendarIcon, Tag, CreditCard, AlignLeft, ArrowUpCircle, ArrowDownCircle, Wallet, Loader2, Check } from "lucide-react"
-import { toast } from "sonner" // <--- Import Novo
+import { toast } from "sonner"
 
 import {
   Sheet,
@@ -72,7 +72,13 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(transaction.amount)
   )
   const [description, setDescription] = useState(transaction.description)
-  const [date, setDate] = useState(new Date(transaction.date).toISOString().split('T')[0])
+  const [date, setDate] = useState(() => {
+    try {
+      return new Date(transaction.date).toISOString().split('T')[0]
+    } catch {
+      return new Date().toISOString().split('T')[0]
+    }
+  })
   const [categoryId, setCategoryId] = useState(transaction.categoryId || "general")
   const [paymentMethod, setPaymentMethod] = useState(transaction.paymentMethod)
   const [type, setType] = useState(transaction.type)
@@ -103,7 +109,6 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
 
     await updateTransaction(formData)
     
-    // Toast Sucesso
     toast.success("Transação atualizada!", {
         description: "As alterações foram salvas com sucesso.",
         icon: <Check className="text-emerald-500" />
@@ -113,19 +118,31 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
     setOpen(false)
   }
 
-  // Lógica de Exclusão Elegante (Toast com Ação)
   const handleDeleteRequest = () => {
+    if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
+
     toast("Excluir transação?", {
         description: "Essa ação não pode ser desfeita.",
+        duration: 5000,
         action: {
             label: "Confirmar Exclusão",
-            onClick: () => performDelete()
+            onClick: (e) => {
+                e.stopPropagation();
+                e.nativeEvent.stopImmediatePropagation();
+                performDelete();
+            }
         },
         cancel: {
             label: "Cancelar",
-            onClick: () => {}
+            onClick: (e) => {
+                e?.stopPropagation();
+                e?.nativeEvent.stopImmediatePropagation();
+                // O clique aqui fecha o toast automaticamente,
+                // mas graças ao onInteractOutside abaixo, o Sheet não fechará.
+            }
         },
-        duration: 5000, // Dá tempo de pensar
     })
   }
 
@@ -152,7 +169,20 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
           {children}
       </SheetTrigger>
       
-      <SheetContent className="w-full sm:max-w-md bg-zinc-950/90 backdrop-blur-xl border-l border-white/5 p-0 flex flex-col h-full shadow-2xl">
+      {/* 🟢 CORREÇÃO: onInteractOutside 
+         Isso intercepta cliques fora do modal. Se o alvo do clique for
+         parte do componente "toaster", impedimos o modal de fechar.
+      */}
+      <SheetContent 
+        className="w-full sm:max-w-md bg-zinc-950/90 backdrop-blur-xl border-l border-white/5 p-0 flex flex-col h-full shadow-2xl"
+        onInteractOutside={(e) => {
+            const target = e.target as Element;
+            // Se o clique foi no Toast (que tem a classe .toaster), previne o fechamento
+            if (target.closest(".toaster")) {
+                e.preventDefault();
+            }
+        }}
+      >
         <SheetHeader className="p-5 pb-2 border-b border-white/5 bg-transparent">
           <SheetTitle className="text-base font-semibold text-white text-center">Editar Transação</SheetTitle>
         </SheetHeader>
@@ -160,9 +190,8 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
         <form action={handleSave} className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="p-5 space-y-6 pb-32">
             
-            {/* SEÇÃO DE VALOR (Compacta) */}
+            {/* SEÇÃO DE VALOR */}
             <div className="flex flex-col items-center gap-4">
-               {/* Segmented Control iOS Style */}
                <div className="flex p-1 bg-zinc-900/80 rounded-lg border border-white/5 w-full max-w-[220px]">
                   <button
                     type="button"
@@ -205,7 +234,7 @@ export function EditTransactionSheet({ children, transaction, categories, accoun
                </div>
             </div>
 
-            {/* CONTAINER DE CAMPOS (Visual Grouped List) */}
+            {/* CONTAINER DE CAMPOS */}
             <div className="bg-zinc-900/30 backdrop-blur-md rounded-2xl border border-white/5 overflow-hidden">
                 
                 {/* DESCRIÇÃO */}

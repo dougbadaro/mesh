@@ -53,8 +53,6 @@ interface TransactionsTableProps {
 export function TransactionsTable({ transactions, categories, accounts }: TransactionsTableProps) {
 
   // 🟢 1. CONVERSÃO DE DADOS GLOBAIS (String -> Date)
-  // O EditTransactionSheet exige que 'categories' tenham objetos Date.
-  // Convertemos aqui uma única vez.
   const richCategories = useMemo(() => {
     return categories.map(cat => ({
       ...cat,
@@ -63,7 +61,6 @@ export function TransactionsTable({ transactions, categories, accounts }: Transa
     }))
   }, [categories])
 
-  // Contas geralmente são compatíveis, mas garantimos o formato básico
   const richAccounts = useMemo(() => {
     return accounts.map(acc => ({
       id: acc.id,
@@ -71,7 +68,6 @@ export function TransactionsTable({ transactions, categories, accounts }: Transa
     }))
   }, [accounts])
 
-  // Helpers de formatação
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
 
@@ -83,26 +79,24 @@ export function TransactionsTable({ transactions, categories, accounts }: Transa
       {transactions.map((t) => {
         
         // 🟢 2. CONVERSÃO INDIVIDUAL (String -> Date)
-        // Preparamos o objeto exatamente como o EditTransactionSheet quer receber
         const richTransaction = {
             id: t.id,
             description: t.description,
             amount: t.amount,
-            date: new Date(t.date), // String ISO -> Date Object
+            date: new Date(t.date),
             type: t.type,
             paymentMethod: t.paymentMethod,
             categoryId: t.categoryId,
             bankAccountId: t.bankAccountId,
             dueDate: t.dueDate ? new Date(t.dueDate) : null,
-            // Passamos apenas o necessário da categoria aninhada para exibição no form se precisar
             category: t.category ? { name: t.category.name } : null
         }
 
         return (
           <EditTransactionSheet 
             key={t.id} 
-            transaction={richTransaction} // Passamos o objeto com Date
-            categories={richCategories}   // Passamos a lista com Date
+            transaction={richTransaction}
+            categories={richCategories}
             accounts={richAccounts}
           >
             {/* O CONTEÚDO CLICÁVEL (TRIGGER) */}
@@ -125,7 +119,6 @@ export function TransactionsTable({ transactions, categories, accounts }: Transa
                             {t.description}
                         </p>
                         <div className="flex items-center gap-2 md:hidden mt-0.5">
-                            {/* 🟢 BLINDAGEM DO ERRO DE DATA */}
                             <span className="text-[10px] text-zinc-500" suppressHydrationWarning>
                                 {formatDate(t.date)}
                             </span>
@@ -165,7 +158,9 @@ export function TransactionsTable({ transactions, categories, accounts }: Transa
                 </div>
 
                 {/* COLUNA VALOR (3 cols) */}
-                <div className="col-span-3 w-full flex flex-row md:flex-col items-center justify-between md:items-end gap-0.5">
+                {/* 🟢 CORREÇÃO: Adicionei 'md:pr-8' (padding-right) para empurrar o texto
+                    para a esquerda, criando espaço para o ícone de lápis aparecer sem cobrir o valor. */}
+                <div className="col-span-3 w-full flex flex-row md:flex-col items-center justify-between md:items-end gap-0.5 md:pr-8">
                      <p className={`text-sm font-bold tabular-nums ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-zinc-200'}`}>
                         {t.type === 'INCOME' ? '+' : '-'} {formatCurrency(t.amount)}
                      </p>

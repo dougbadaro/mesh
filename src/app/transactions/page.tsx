@@ -32,14 +32,12 @@ interface TransactionsPageProps {
 }
 
 // 🟢 TIPO INTERMEDIÁRIO (O que vem do Banco de Dados)
-// Precisamos disso pois o tipo 'Transaction' padrão não sabe que category e bankAccount foram incluídos.
 type TransactionWithRelations = Transaction & {
   category: Category | null;
   bankAccount: BankAccount | null;
 }
 
 // 🔧 FUNÇÃO DE LIMPEZA (SERIALIZER)
-// Agora tipada corretamente: Recebe dados do Prisma -> Retorna dados Seguros
 const toClientTransaction = (t: TransactionWithRelations): SafeTransaction => {
   return {
     id: t.id,
@@ -130,7 +128,6 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
 
   // --- SANITIZAÇÃO DE DADOS (Server -> Client) ---
   
-  // 1. Categorias: Decimal -> Number, Date -> String
   const categories: SafeCategory[] = rawCategories.map(cat => ({
     id: cat.id,
     name: cat.name,
@@ -141,14 +138,11 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
     updatedAt: cat.updatedAt.toISOString(),
   }))
 
-  // 2. Contas: Decimal -> Number
   const accounts: SafeAccount[] = rawAccounts.map(acc => ({
     ...acc,
     initialBalance: Number(acc.initialBalance)
   }));
 
-  // 3. Transações: Decimal -> Number, Date -> String 
-  // Agora usamos a função helper tipada corretamente
   const transactions: SafeTransaction[] = rawTransactions.map(toClientTransaction);
 
   return (
@@ -182,7 +176,8 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
             <div className="col-span-5">Descrição</div>
             <div className="col-span-2">Data</div>
             <div className="col-span-2">Categoria / Conta</div>
-            <div className="col-span-3 text-right">Valor</div>
+            {/* 🟢 CORREÇÃO: md:pr-8 alinha o título com os valores das linhas */}
+            <div className="col-span-3 text-right md:pr-8">Valor</div>
         </div>
 
         {/* Lista de Transações */}
@@ -192,7 +187,7 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
               <p className="text-xs">Nenhum resultado.</p>
            </div>
         ) : (
-           /* 🟢 COMPONENTE DE TABELA (Client Component) */
+           /* COMPONENTE DE TABELA (Client Component) */
            <TransactionsTable 
               transactions={transactions}
               categories={categories}
