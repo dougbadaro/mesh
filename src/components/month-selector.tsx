@@ -36,8 +36,7 @@ export function MonthSelector() {
   }
 
   return (
-    <div className="flex items-center gap-1 rounded-full border border-white/5 bg-zinc-900/50 p-1 shadow-sm backdrop-blur-md">
-      {/* Botão Anterior */}
+    <div className="flex w-full items-center justify-between gap-1 rounded-full border border-white/5 bg-zinc-900/50 p-1 shadow-sm backdrop-blur-md md:w-auto md:justify-start">
       <Button
         variant="ghost"
         size="icon"
@@ -47,14 +46,12 @@ export function MonthSelector() {
         <ChevronLeft size={14} />
       </Button>
 
-      {/* Texto Central (Compacto) */}
-      <div className="min-w-[110px] px-2 text-center">
+      <div className="flex flex-1 items-center justify-center px-2 md:min-w-[110px] md:flex-none">
         <span className="select-none text-xs font-semibold capitalize tracking-wide text-zinc-200">
           {date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
         </span>
       </div>
 
-      {/* Botão Próximo */}
       <Button
         variant="ghost"
         size="icon"

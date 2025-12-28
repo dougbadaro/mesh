@@ -18,8 +18,6 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
-// --- INTERFACES ---
-
 export interface ChartData {
   amount: number
   date: string
@@ -53,11 +51,10 @@ interface CustomTooltipProps extends TooltipProps<number, string> {
   label?: string
 }
 
-// Cores mais sofisticadas para Dark Mode
 const COLORS = {
-  income: "#34d399", // Emerald 400
-  expense: "#fb7185", // Rose 400
-  balance: "#60a5fa", // Blue 400
+  income: "#34d399",
+  expense: "#fb7185",
+  balance: "#60a5fa",
   pie: ["#60a5fa", "#a78bfa", "#f472b6", "#fb7185", "#fbbf24", "#34d399"],
 }
 
@@ -71,7 +68,6 @@ const formatCurrency = (value: number) =>
 const formatCurrencyFull = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
 
-// --- TOOLTIP COMPACTO (Estilo Vidro) ---
 const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     return (
@@ -81,7 +77,6 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
         <div className="space-y-1.5">
           {payload.map((entry, index) => {
             const val = entry.value ?? 0
-            // Ignora valores zerados para limpar o visual
             if (val === 0 && entry.dataKey !== "balance") return null
 
             return (
@@ -132,11 +127,9 @@ export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) 
   limitDate.setMonth(limitDate.getMonth() + 3)
   limitDate.setDate(1)
 
-  // Reducer (Logica de Agrupamento)
   const groupedMap = data.reduce<Record<string, GroupedData>>((acc, t) => {
     const tDate = new Date(t.date)
 
-    // Filtro de Limite Futuro
     const tCheck = new Date(tDate.getFullYear(), tDate.getMonth(), 1)
     const limitCheck = new Date(limitDate.getFullYear(), limitDate.getMonth(), 1)
 
@@ -172,7 +165,6 @@ export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) 
 
   const sortedChartData = Object.values(groupedMap).sort((a, b) => a.sortDate - b.sortDate)
 
-  // Cálculo de Saldo Acumulado
   const chartData = sortedChartData.reduce<{ results: GroupedData[]; currentBalance: number }>(
     (acc, item) => {
       const dailyResult = item.income - item.expense
@@ -183,7 +175,6 @@ export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) 
     { results: [], currentBalance: initialBalance }
   ).results
 
-  // --- DADOS PIZZA ---
   const pieChartDataRaw = data
     .filter((t) => t.type === "EXPENSE" && t.categoryName)
     .reduce((acc: Record<string, number>, t) => {
@@ -199,7 +190,6 @@ export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) 
 
   return (
     <div className="grid h-full grid-cols-1 gap-6 xl:grid-cols-3">
-      {/* 1. GRÁFICO PRINCIPAL */}
       <div className="flex h-full min-h-[250px] flex-col xl:col-span-2">
         <div className="relative h-full w-full">
           <div className="absolute opacity-0">
@@ -274,7 +264,6 @@ export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) 
         </div>
       </div>
 
-      {/* 2. GRÁFICO SECUNDÁRIO (PIZZA) */}
       <Card className="flex flex-col overflow-hidden rounded-2xl border-white/5 bg-zinc-900/20 shadow-none backdrop-blur-sm">
         <CardHeader className="border-b border-white/5 px-4 pb-2 pt-4">
           <CardTitle className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">
@@ -286,7 +275,7 @@ export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) 
         <CardContent className="flex flex-1 flex-col justify-center p-2">
           {pieChartData.length > 0 ? (
             <>
-              <div className="relative min-h-[120px] flex-1">
+              <div className="relative min-h-[160px] flex-1">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -301,7 +290,10 @@ export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) 
                       cornerRadius={3}
                     >
                       {pieChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS.pie[index % COLORS.pie.length]} />
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS.pie[index % COLORS.pie.length]}
+                        />
                       ))}
                     </Pie>
                     <Tooltip
@@ -313,12 +305,13 @@ export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) 
                         padding: "8px",
                       }}
                       itemStyle={{ color: "#fff", fontSize: "10px" }}
-                      formatter={(value: number | undefined) => formatCurrencyFull(value ?? 0)}
+                      formatter={(value: number | undefined) =>
+                        formatCurrencyFull(value ?? 0)
+                      }
                     />
                   </PieChart>
                 </ResponsiveContainer>
 
-                {/* Total no centro */}
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
                     <span className="block text-[9px] uppercase tracking-wide text-zinc-500">
@@ -343,13 +336,15 @@ export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) 
                         {entry.name}
                       </span>
                     </div>
-                    <span className="font-mono text-zinc-300">{formatCurrency(entry.value)}</span>
+                    <span className="font-mono text-zinc-300">
+                      {formatCurrency(entry.value)}
+                    </span>
                   </div>
                 ))}
               </div>
             </>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-1 text-zinc-700">
+            <div className="flex h-full min-h-[160px] flex-col items-center justify-center gap-1 text-zinc-700">
               <PieChartIcon size={20} className="opacity-20" />
               <p className="text-[10px]">Vazio</p>
             </div>
