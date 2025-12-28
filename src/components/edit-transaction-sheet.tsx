@@ -37,7 +37,6 @@ import {
 import { cn } from "@/lib/utils"
 import { deleteTransaction, updateTransaction } from "@/app/actions/transactions"
 
-// --- INTERFACES ---
 interface CategoryDTO {
   id: string
   name: string
@@ -128,15 +127,19 @@ export function EditTransactionSheet({
     formData.set("type", type)
     formData.set("bankAccountId", bankAccountId === "none" ? "" : bankAccountId)
 
-    await updateTransaction(formData)
+    const response = await updateTransaction(formData)
 
-    toast.success("Transação atualizada!", {
-      description: "As alterações foram salvas com sucesso.",
-      icon: <Check className="text-emerald-500" />,
-    })
+    if (response?.error) {
+      toast.error(response.error)
+    } else {
+      toast.success("Transação atualizada!", {
+        description: "As alterações foram salvas com sucesso.",
+        icon: <Check className="text-emerald-500" />,
+      })
+      setOpen(false)
+    }
 
     setIsPending(false)
-    setOpen(false)
   }
 
   const handleDeleteRequest = () => {
@@ -160,24 +163,23 @@ export function EditTransactionSheet({
         onClick: (e) => {
           e?.stopPropagation()
           e?.nativeEvent.stopImmediatePropagation()
-          // O clique aqui fecha o toast automaticamente,
-          // mas graças ao onInteractOutside abaixo, o Sheet não fechará.
         },
       },
     })
   }
 
   const performDelete = async () => {
-    setIsPending(true)
-    const formData = new FormData()
-    formData.set("id", transaction.id)
-
-    await deleteTransaction(formData)
-
+    // UI Otimista: Fecha o modal imediatamente e mostra sucesso
+    setOpen(false)
     toast.success("Transação excluída")
 
-    setIsPending(false)
-    setOpen(false)
+    // Executa a exclusão em background
+    const response = await deleteTransaction(transaction.id)
+
+    // Se der erro, avisa o usuário (o rollback visual seria feito aqui se usássemos useOptimistic na lista pai)
+    if (response?.error) {
+      toast.error(response.error)
+    }
   }
 
   if (!isMounted) {
@@ -188,15 +190,10 @@ export function EditTransactionSheet({
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
 
-      {/* 🟢 CORREÇÃO: onInteractOutside 
-         Isso intercepta cliques fora do modal. Se o alvo do clique for
-         parte do componente "toaster", impedimos o modal de fechar.
-      */}
       <SheetContent
         className="flex h-full w-full flex-col border-l border-white/5 bg-zinc-950/90 p-0 shadow-2xl backdrop-blur-xl sm:max-w-md"
         onInteractOutside={(e) => {
           const target = e.target as Element
-          // Se o clique foi no Toast (que tem a classe .toaster), previne o fechamento
           if (target.closest(".toaster")) {
             e.preventDefault()
           }
@@ -210,7 +207,6 @@ export function EditTransactionSheet({
 
         <form action={handleSave} className="custom-scrollbar flex-1 overflow-y-auto">
           <div className="space-y-6 p-5 pb-32">
-            {/* SEÇÃO DE VALOR */}
             <div className="flex flex-col items-center gap-4">
               <div className="flex w-full max-w-[220px] rounded-lg border border-white/5 bg-zinc-900/80 p-1">
                 <button
@@ -256,9 +252,7 @@ export function EditTransactionSheet({
               </div>
             </div>
 
-            {/* CONTAINER DE CAMPOS */}
             <div className="overflow-hidden rounded-2xl border border-white/5 bg-zinc-900/30 backdrop-blur-md">
-              {/* DESCRIÇÃO */}
               <div className="border-b border-white/5 p-3">
                 <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
                   Descrição
@@ -277,7 +271,6 @@ export function EditTransactionSheet({
               </div>
 
               <div className="grid grid-cols-2 divide-x divide-white/5 border-b border-white/5">
-                {/* DATA */}
                 <div className="p-3">
                   <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
                     Data
@@ -295,7 +288,6 @@ export function EditTransactionSheet({
                   </div>
                 </div>
 
-                {/* CATEGORIA */}
                 <div className="p-3">
                   <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
                     Categoria
@@ -321,7 +313,6 @@ export function EditTransactionSheet({
                 </div>
               </div>
 
-              {/* CARTEIRA */}
               <div className="border-b border-white/5 p-3">
                 <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
                   Carteira
@@ -346,7 +337,6 @@ export function EditTransactionSheet({
                 </div>
               </div>
 
-              {/* PAGAMENTO */}
               <div className="p-3">
                 <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
                   Pagamento
