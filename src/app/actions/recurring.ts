@@ -10,27 +10,20 @@ const editSchema = z.object({
   id: z.string(),
   newAmount: z.coerce.number().positive(),
   newDescription: z.string().min(1),
-  // Converte a string YYYY-MM-DD para um objeto Date estável
+  // Mantemos o padrão de hora fixa para evitar problemas de fuso horário
   newStartDate: z.string().transform((val) => new Date(val + "T12:00:00")),
-  // Transforma string vazia ou "none" em null para o Prisma
   newBankAccountId: z.string().optional().transform(val => 
     val === "" || val === "none" ? null : val
   ),
-  // Transforma string vazia ou "general" em null para categorias
   newCategoryId: z.string().optional().transform(val => 
     val === "" || val === "general" ? null : val
   ),
 })
 
-/**
- * Atualiza uma assinatura recorrente e regenera as transações futuras
- */
 export async function editRecurring(formData: FormData) {
   const session = await auth()
   
-  if (!session?.user?.email) {
-    throw new Error("Usuário não autenticado")
-  }
+  if (!session?.user?.email) throw new Error("Usuário não autenticado")
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email }
@@ -38,7 +31,6 @@ export async function editRecurring(formData: FormData) {
 
   if (!user) throw new Error("Usuário não encontrado")
     
-  // Captura dados do FormData
   const rawData = {
     id: formData.get('id'),
     newAmount: formData.get('amount'),
@@ -48,17 +40,15 @@ export async function editRecurring(formData: FormData) {
     newCategoryId: formData.get('categoryId'),
   }
 
-  // Valida com Zod
   const data = editSchema.parse(rawData)
 
-  // 1. Busca a Assinatura Original para manter o tipo (INCOME/EXPENSE) e método original
   const recurring = await prisma.recurringTransaction.findUnique({
     where: { id: data.id },
   })
 
   if (!recurring) throw new Error("Assinatura não encontrada")
 
-  // 2. Atualiza a Tabela MESTRE (RecurringTransaction)
+  // 1. Atualiza a Tabela Mestre
   await prisma.recurringTransaction.update({
     where: { id: data.id },
     data: {
@@ -66,15 +56,15 @@ export async function editRecurring(formData: FormData) {
       description: data.newDescription,
       startDate: data.newStartDate,
       bankAccountId: data.newBankAccountId,
-      categoryId: data.newCategoryId, // <--- Salva a nova categoria
+      categoryId: data.newCategoryId,
     }
   })
 
-  // 3. REGENERAÇÃO DO FLUXO CAIXA FUTURO
+  // 2. LÓGICA DE APAGAR O FUTURO
   const today = new Date()
-  today.setHours(0, 0, 0, 0) // Normaliza para o início do dia
+  today.setHours(0, 0, 0, 0) // Zera a hora para comparação justa
   
-  // Apaga todas as transações vinculadas a essa recorrência que ainda não venceram
+  // Apaga transações futuras ou de hoje
   await prisma.transaction.deleteMany({
     where: {
       recurringId: data.id,
@@ -82,18 +72,44 @@ export async function editRecurring(formData: FormData) {
     }
   })
 
-  // Prepara a criação dos próximos 12 meses baseados nos novos dados
+  // 3. CHECK ANTI-DUPLICIDADE (A CORREÇÃO)
+  // Verifica se sobrou alguma transação no mês atual (que era < today)
+  // Se sobrou, não podemos criar outra para este mês.
+  const startOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+  
+  const hasPreservedTransaction = await prisma.transaction.findFirst({
+    where: {
+      recurringId: data.id,
+      date: {
+        gte: startOfCurrentMonth,
+        lt: today // Procura estritamente no passado (as que não foram deletadas)
+      }
+    }
+  })
+
+  // 4. REGENERAÇÃO INTELIGENTE
   const transactionsToCreate = []
   const baseDay = data.newStartDate.getDate()
+  
+  // Definimos um offset inicial. Começamos do mês 0 (atual).
+  let startMonthOffset = 0
 
+  // Calculamos a data alvo para o mês atual
+  const currentMonthTarget = new Date(today.getFullYear(), today.getMonth(), baseDay)
+  currentMonthTarget.setHours(12, 0, 0, 0)
+
+  // SE a data alvo já passou (é menor que hoje), pulamos para o próximo mês.
+  // OU SE já existe uma transação preservada neste mês (anti-duplicidade), também pulamos.
+  if (currentMonthTarget < today || hasPreservedTransaction) {
+     startMonthOffset = 1
+  }
+
+  // Gera os próximos 12 lançamentos a partir do offset definido
   for (let i = 0; i < 12; i++) {
-    // Calcula a data de cada mês
-    const targetDate = new Date(today.getFullYear(), today.getMonth() + i, baseDay)
+    const targetDate = new Date(today.getFullYear(), today.getMonth() + startMonthOffset + i, baseDay)
     
-    // Se o dia calculado já passou neste mês atual, pula para o próximo mês
-    if (i === 0 && targetDate < today) {
-       targetDate.setMonth(targetDate.getMonth() + 1)
-    }
+    // Força hora fixa para evitar bugs de timezone (UTC vs Local)
+    targetDate.setHours(12, 0, 0, 0)
 
     transactionsToCreate.push({
       amount: data.newAmount,
@@ -101,28 +117,23 @@ export async function editRecurring(formData: FormData) {
       type: recurring.type,
       paymentMethod: recurring.paymentMethod,
       userId: recurring.userId,
-      categoryId: data.newCategoryId,     // <--- Categoria atualizada
-      bankAccountId: data.newBankAccountId, // <--- Carteira atualizada
+      categoryId: data.newCategoryId,
+      bankAccountId: data.newBankAccountId,
       date: targetDate, 
       dueDate: targetDate, 
       recurringId: recurring.id
     })
   }
 
-  // Insere as novas transações em lote
   if (transactionsToCreate.length > 0) {
     await prisma.transaction.createMany({ data: transactionsToCreate })
   }
 
-  // Revalida as rotas para atualizar a UI
   revalidatePath('/recurring')
   revalidatePath('/budget')
   revalidatePath('/')
 }
 
-/**
- * Interrompe uma assinatura (desativa e remove lançamentos futuros)
- */
 export async function stopRecurring(formData: FormData) {
   const id = formData.get('id') as string
   if (!id) return
@@ -130,13 +141,11 @@ export async function stopRecurring(formData: FormData) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  // 1. Marca a assinatura mestre como inativa
   await prisma.recurringTransaction.update({
     where: { id },
     data: { active: false }
   })
 
-  // 2. Remove apenas os lançamentos que ainda não aconteceram
   await prisma.transaction.deleteMany({
     where: {
       recurringId: id,
