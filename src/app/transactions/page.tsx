@@ -2,22 +2,24 @@ import Link from "next/link"
 import { prisma } from "@/lib/prisma"
 import { getAuthenticatedUser } from "@/lib/auth-check"
 import { TransactionFilters } from "./components/transaction-filters"
-import { EditTransactionSheet } from "@/components/edit-transaction-sheet"
+
+// 🟢 IMPORTAÇÕES: Tipos seguros do componente e tipos do Prisma
+import { 
+  TransactionsTable, 
+  SafeTransaction, 
+  SafeCategory, 
+  SafeAccount 
+} from "./components/transactions-table"
+
 import { 
   ArrowLeft, 
   ChevronLeft, 
   ChevronRight, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
   SearchX,
-  CreditCard,
-  Pencil,
-  Wallet
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { TransactionType, Prisma } from "@prisma/client"
+import { TransactionType, Prisma, Transaction, Category, BankAccount } from "@prisma/client"
 
 interface TransactionsPageProps {
   searchParams: Promise<{
@@ -28,6 +30,42 @@ interface TransactionsPageProps {
     bankId?: string 
   }>
 }
+
+// 🟢 TIPO INTERMEDIÁRIO (O que vem do Banco de Dados)
+// Precisamos disso pois o tipo 'Transaction' padrão não sabe que category e bankAccount foram incluídos.
+type TransactionWithRelations = Transaction & {
+  category: Category | null;
+  bankAccount: BankAccount | null;
+}
+
+// 🔧 FUNÇÃO DE LIMPEZA (SERIALIZER)
+// Agora tipada corretamente: Recebe dados do Prisma -> Retorna dados Seguros
+const toClientTransaction = (t: TransactionWithRelations): SafeTransaction => {
+  return {
+    id: t.id,
+    description: t.description,
+    amount: Number(t.amount), // Converte Decimal do Prisma para Number
+    type: t.type,
+    paymentMethod: t.paymentMethod,
+    date: t.date.toISOString(), // Converte Date para String ISO
+    dueDate: t.dueDate ? t.dueDate.toISOString() : null,
+    categoryId: t.categoryId,
+    bankAccountId: t.bankAccountId,
+    category: t.category ? {
+      id: t.category.id,
+      name: t.category.name,
+      type: t.category.type,
+      userId: t.category.userId,
+      budgetLimit: t.category.budgetLimit ? Number(t.category.budgetLimit) : null,
+      createdAt: t.category.createdAt.toISOString(),
+      updatedAt: t.category.updatedAt.toISOString(),
+    } : null,
+    bankAccount: t.bankAccount ? {
+      name: t.bankAccount.name,
+      color: t.bankAccount.color
+    } : null
+  };
+};
 
 export default async function TransactionsPage(props: TransactionsPageProps) {
   const user = await getAuthenticatedUser()
@@ -66,14 +104,14 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
     ...(bankId && { bankAccountId: bankId }) 
   }
 
-  // --- BUSCA PARALELA ---
+  // --- BUSCA PARALELA NO BANCO ---
   const [totalItems, rawTransactions, rawCategories, rawAccounts] = await Promise.all([
     prisma.transaction.count({ where: whereCondition }),
     prisma.transaction.findMany({
         where: whereCondition,
         include: { 
             category: true,
-            bankAccount: { select: { name: true, color: true } } 
+            bankAccount: true 
         },
         orderBy: { date: 'desc' },
         skip: (currentPage - 1) * itemsPerPage,
@@ -84,39 +122,39 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
     }),
     prisma.bankAccount.findMany({
         where: { userId: user.id },
-        select: { id: true, name: true }
+        select: { id: true, name: true, type: true, color: true, initialBalance: true, includeInTotal: true }
     })
   ])
 
   const totalPages = Math.ceil(totalItems / itemsPerPage)
 
-  // --- SANITIZAÇÃO DE DADOS ---
-  const categories = rawCategories.map(cat => ({
-    ...cat,
-    budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null
-  }))
-
-  const accounts = rawAccounts;
-
-  const transactions = rawTransactions.map(t => ({
-    ...t,
-    amount: Number(t.amount),
-    category: t.category ? {
-        ...t.category,
-        budgetLimit: t.category.budgetLimit ? Number(t.category.budgetLimit) : null
-    } : null
-  }))
-
-  const formatCurrency = (val: number) => 
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
+  // --- SANITIZAÇÃO DE DADOS (Server -> Client) ---
   
-  const formatDate = (date: Date) => 
-    new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
+  // 1. Categorias: Decimal -> Number, Date -> String
+  const categories: SafeCategory[] = rawCategories.map(cat => ({
+    id: cat.id,
+    name: cat.name,
+    type: cat.type,
+    userId: cat.userId,
+    budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null,
+    createdAt: cat.createdAt.toISOString(),
+    updatedAt: cat.updatedAt.toISOString(),
+  }))
+
+  // 2. Contas: Decimal -> Number
+  const accounts: SafeAccount[] = rawAccounts.map(acc => ({
+    ...acc,
+    initialBalance: Number(acc.initialBalance)
+  }));
+
+  // 3. Transações: Decimal -> Number, Date -> String 
+  // Agora usamos a função helper tipada corretamente
+  const transactions: SafeTransaction[] = rawTransactions.map(toClientTransaction);
 
   return (
     <main className="max-w-6xl mx-auto p-4 md:p-6 pb-24 animate-in fade-in duration-700">
       
-      {/* HEADER - Compacto */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" asChild className="h-9 w-9 rounded-xl hover:bg-white/5 text-zinc-400">
@@ -136,9 +174,10 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
       {/* FILTROS */}
       <TransactionFilters accounts={accounts} />
 
+      {/* ÁREA DA TABELA */}
       <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 rounded-3xl overflow-hidden shadow-sm mt-6">
         
-        {/* Header Tabela Desktop - Mais sutil */}
+        {/* Cabeçalho Visual da Tabela */}
         <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 border-b border-white/5 bg-white/[0.02] text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
             <div className="col-span-5">Descrição</div>
             <div className="col-span-2">Data</div>
@@ -153,95 +192,16 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
               <p className="text-xs">Nenhum resultado.</p>
            </div>
         ) : (
-           <div className="divide-y divide-white/5">
-              {transactions.map((t) => (
-                 <EditTransactionSheet 
-                    key={t.id} 
-                    transaction={{
-                        ...t,
-                        categoryId: t.categoryId,
-                        bankAccountId: t.bankAccountId 
-                    }} 
-                    categories={categories}
-                    accounts={accounts} 
-                 >
-                    <div 
-                        className="group relative md:grid md:grid-cols-12 md:gap-4 p-4 px-6 items-center hover:bg-white/[0.03] transition-colors cursor-pointer outline-none flex flex-col gap-2"
-                        role="button"
-                        tabIndex={0}
-                    >
-                        {/* COLUNA DESCRIÇÃO */}
-                        <div className="col-span-5 flex items-center gap-4 w-full text-left">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
-                                t.type === 'INCOME' 
-                                ? 'bg-emerald-500/10 text-emerald-500' 
-                                : 'bg-zinc-800 text-zinc-400'
-                            }`}>
-                                {t.type === 'INCOME' ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
-                            </div>
-                            <div className="overflow-hidden min-w-0">
-                                <p className="text-sm font-medium text-zinc-200 truncate group-hover:text-white transition">
-                                    {t.description}
-                                </p>
-                                <div className="flex items-center gap-2 md:hidden mt-0.5">
-                                    <span className="text-[10px] text-zinc-500">{formatDate(t.date)}</span>
-                                    {t.category && <span className="text-[10px] text-zinc-500">• {t.category.name}</span>}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* COLUNA DATA */}
-                        <div className="col-span-2 hidden md:block text-xs text-zinc-400 text-left font-mono">
-                            {formatDate(t.date)}
-                        </div>
-
-                        {/* COLUNA CATEGORIA E CONTA */}
-                        <div className="col-span-2 hidden md:block text-left">
-                            <div className="flex flex-col gap-1 items-start">
-                                {t.category ? (
-                                    <span className="text-[10px] text-zinc-400 font-medium px-1.5 py-0.5 rounded-md bg-white/5 border border-white/5">
-                                        {t.category.name}
-                                    </span>
-                                ) : (
-                                    <span className="text-zinc-600 text-[10px]">-</span>
-                                )}
-
-                                {t.bankAccount && (
-                                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-500" title={t.bankAccount.name}>
-                                        <div 
-                                            className="w-1.5 h-1.5 rounded-full shrink-0" 
-                                            style={{ backgroundColor: t.bankAccount.color || "#10b981" }}
-                                        />
-                                        <span className="truncate max-w-[100px]">{t.bankAccount.name}</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* COLUNA VALOR */}
-                        <div className="col-span-3 w-full flex flex-row md:flex-col items-center justify-between md:items-end gap-0.5">
-                             <p className={`text-sm font-bold tabular-nums ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-zinc-200'}`}>
-                                {t.type === 'INCOME' ? '+' : '-'} {formatCurrency(t.amount)}
-                             </p>
-                             <div className="flex items-center gap-1 text-zinc-600 text-[10px] uppercase tracking-wide">
-                                {t.paymentMethod === 'CREDIT_CARD' && <CreditCard size={10} />}
-                                <span>{t.paymentMethod.toLowerCase().replace('_', ' ')}</span>
-                             </div>
-                        </div>
-                        
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
-                            <div className="p-1.5 bg-white/10 rounded-full text-white backdrop-blur-md">
-                                <Pencil size={12} />
-                            </div>
-                        </div>
-                    </div>
-                 </EditTransactionSheet>
-              ))}
-           </div>
+           /* 🟢 COMPONENTE DE TABELA (Client Component) */
+           <TransactionsTable 
+              transactions={transactions}
+              categories={categories}
+              accounts={accounts}
+           />
         )}
       </div>
 
-      {/* PAGINAÇÃO - Compacta */}
+      {/* PAGINAÇÃO */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-1 mt-6">
             <Button

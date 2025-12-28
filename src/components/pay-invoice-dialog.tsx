@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { payInvoice } from "@/app/actions/pay-invoice"
 import { Wallet, CalendarIcon, Loader2, CheckCircle2, AlertCircle, Building2 } from "lucide-react"
-import { toast } from "sonner" // <--- IMPORTAÇÃO DO SONNER
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -33,7 +33,17 @@ export function PayInvoiceDialog({ invoiceTotal, accounts, monthName }: PayInvoi
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   
-  // States
+  // 🟢 CORREÇÃO: isMounted com setTimeout para evitar erro do Linter e Hidratação
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsMounted(true)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // States do formulário
   const [selectedAccount, setSelectedAccount] = useState<string>("")
   const [amount, setAmount] = useState(invoiceTotal)
   const [amountDisplay, setAmountDisplay] = useState(
@@ -49,7 +59,6 @@ export function PayInvoiceDialog({ invoiceTotal, accounts, monthName }: PayInvoi
   }
 
   const handlePay = async () => {
-    // Validação com Toast
     if (!selectedAccount) {
         toast.warning("Selecione uma conta", {
             description: "Você precisa informar de onde o dinheiro vai sair."
@@ -70,13 +79,11 @@ export function PayInvoiceDialog({ invoiceTotal, accounts, monthName }: PayInvoi
 
     if (result.success) {
         setOpen(false)
-        // Sucesso com Toast
         toast.success("Pagamento realizado!", {
             description: `Valor de ${amountDisplay} debitado com sucesso.`,
             duration: 4000,
         })
     } else {
-        // Erro com Toast
         toast.error("Erro ao pagar", {
             description: "Não foi possível registrar o pagamento. Tente novamente."
         })
@@ -88,6 +95,9 @@ export function PayInvoiceDialog({ invoiceTotal, accounts, monthName }: PayInvoi
 
   const currentAccount = accounts.find(a => a.id === selectedAccount)
   const hasBalance = currentAccount ? currentAccount.currentBalance >= amount : true
+
+  // Se não estiver montado no cliente, não renderiza nada (evita erro de IDs)
+  if (!isMounted) return null
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
