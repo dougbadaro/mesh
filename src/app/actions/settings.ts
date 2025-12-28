@@ -1,23 +1,24 @@
-'use server'
+"use server"
 
-import { prisma } from "@/lib/prisma"
-import { getAuthenticatedUser } from "@/lib/auth-check"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+
+import { getAuthenticatedUser } from "@/lib/auth-check"
+import { prisma } from "@/lib/prisma"
 
 const creditCardSettingsSchema = z.object({
   closingDay: z.coerce.number().min(1).max(31),
   dueDay: z.coerce.number().min(1).max(31),
-  scope: z.enum(['future', 'all']).optional().default('future')
+  scope: z.enum(["future", "all"]).optional().default("future"),
 })
 
 export async function updateCreditCardSettings(formData: FormData) {
   const user = await getAuthenticatedUser()
 
   const rawData = {
-    closingDay: formData.get('closingDay'),
-    dueDay: formData.get('dueDay'),
-    scope: formData.get('scope')
+    closingDay: formData.get("closingDay"),
+    dueDay: formData.get("dueDay"),
+    scope: formData.get("scope"),
   }
 
   const result = creditCardSettingsSchema.safeParse(rawData)
@@ -33,36 +34,36 @@ export async function updateCreditCardSettings(formData: FormData) {
     where: { id: user.id },
     data: {
       creditCardClosingDay: closingDay,
-      creditCardDueDay: dueDay
-    }
+      creditCardDueDay: dueDay,
+    },
   })
 
   // 2. Se o usuário optou por "Atualizar existentes", faz o update em lote
-  if (scope === 'all') {
+  if (scope === "all") {
     const cardTransactions = await prisma.transaction.findMany({
-        where: {
-            userId: user.id,
-            paymentMethod: 'CREDIT_CARD'
-        },
-        select: { id: true, dueDate: true }
+      where: {
+        userId: user.id,
+        paymentMethod: "CREDIT_CARD",
+      },
+      select: { id: true, dueDate: true },
     })
 
-    const updates = cardTransactions.map(t => {
-        const currentDueDate = new Date(t.dueDate)
-        const newDueDate = new Date(currentDueDate.getFullYear(), currentDueDate.getMonth(), dueDay)
+    const updates = cardTransactions.map((t) => {
+      const currentDueDate = new Date(t.dueDate)
+      const newDueDate = new Date(currentDueDate.getFullYear(), currentDueDate.getMonth(), dueDay)
 
-        return prisma.transaction.update({
-            where: { id: t.id },
-            data: { dueDate: newDueDate }
-        })
+      return prisma.transaction.update({
+        where: { id: t.id },
+        data: { dueDate: newDueDate },
+      })
     })
 
     if (updates.length > 0) {
-        await prisma.$transaction(updates)
+      await prisma.$transaction(updates)
     }
   }
 
-  revalidatePath('/settings')
-  revalidatePath('/') 
-  revalidatePath('/transactions')
+  revalidatePath("/settings")
+  revalidatePath("/")
+  revalidatePath("/transactions")
 }

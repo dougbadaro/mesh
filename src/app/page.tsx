@@ -1,24 +1,18 @@
-import { getAuthenticatedUser } from "@/lib/auth-check";
-import { prisma } from "@/lib/prisma";
 // Importamos os tipos gerados pelo Prisma
-import { Transaction, Category, BankAccount, TransactionType } from "@prisma/client";
-import { 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  Wallet,
-  Activity,
-  Receipt,
-  TrendingUp
-} from "lucide-react";
+import { BankAccount, Category, Transaction, TransactionType } from "@prisma/client"
+import { Activity, ArrowDownLeft, ArrowUpRight, Receipt, TrendingUp, Wallet } from "lucide-react"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FinancialCharts, ChartData } from "@/components/charts";
-import { MonthSelector } from "@/components/month-selector";
-import { BankAccountsWidget } from "@/components/bank-accounts-widget";
-import { PayInvoiceDialog } from "@/components/pay-invoice-dialog";
-import { CreditCardWidget } from "@/components/credit-card-widget";
-import { DashboardTabs } from "@/components/dashboard-tabs";
-import { TransactionList } from "@/components/transactions-list";
+import { BankAccountsWidget } from "@/components/bank-accounts-widget"
+import { ChartData, FinancialCharts } from "@/components/charts"
+import { CreditCardWidget } from "@/components/credit-card-widget"
+import { DashboardTabs } from "@/components/dashboard-tabs"
+import { MonthSelector } from "@/components/month-selector"
+import { PayInvoiceDialog } from "@/components/pay-invoice-dialog"
+import { TransactionList } from "@/components/transactions-list"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+
+import { getAuthenticatedUser } from "@/lib/auth-check"
+import { prisma } from "@/lib/prisma"
 
 interface DashboardProps {
   searchParams: Promise<{ month?: string; year?: string }>
@@ -28,44 +22,44 @@ interface DashboardProps {
 
 // Tipo auxiliar para o que vem do Prisma (com relacionamentos)
 type TransactionWithRelations = Transaction & {
-  category: Category | null;
-  bankAccount: BankAccount | null;
-};
+  category: Category | null
+  bankAccount: BankAccount | null
+}
 
 // SafeCategory: O que viaja do Server pro Client (JSON)
 export interface SafeCategory {
-  id: string;
-  name: string;
-  type: string;
-  userId: string | null;
-  budgetLimit: number | null;
-  createdAt: string; // ISO String
-  updatedAt: string; // ISO String
+  id: string
+  name: string
+  type: string
+  userId: string | null
+  budgetLimit: number | null
+  createdAt: string // ISO String
+  updatedAt: string // ISO String
 }
 
 // SafeAccount: O que viaja do Server pro Client (JSON)
 export interface SafeAccount {
-  id: string;
-  name: string;
-  type: string;
-  color: string | null;
-  initialBalance: number;
-  includeInTotal: boolean;
+  id: string
+  name: string
+  type: string
+  color: string | null
+  initialBalance: number
+  includeInTotal: boolean
 }
 
 // SafeTransaction: O que viaja do Server pro Client (JSON)
 export interface SafeTransaction {
-  id: string;
-  description: string;
-  amount: number;
-  type: TransactionType;
-  paymentMethod: string;
-  date: string; // ISO String
-  dueDate: string | null; // ISO String
-  categoryId: string | null;
-  bankAccountId: string | null;
-  category: SafeCategory | null;
-  bankAccount: { name: string; color: string | null } | null;
+  id: string
+  description: string
+  amount: number
+  type: TransactionType
+  paymentMethod: string
+  date: string // ISO String
+  dueDate: string | null // ISO String
+  categoryId: string | null
+  bankAccountId: string | null
+  category: SafeCategory | null
+  bankAccount: { name: string; color: string | null } | null
 }
 
 // --- 2. FUNÇÃO DE CONVERSÃO (SERIALIZER) ---
@@ -81,93 +75,109 @@ const toClientTransaction = (t: TransactionWithRelations): SafeTransaction => {
     dueDate: t.dueDate ? t.dueDate.toISOString() : null,
     categoryId: t.categoryId,
     bankAccountId: t.bankAccountId,
-    category: t.category ? {
-      id: t.category.id,
-      name: t.category.name,
-      type: t.category.type,
-      userId: t.category.userId,
-      budgetLimit: t.category.budgetLimit ? Number(t.category.budgetLimit) : null,
-      createdAt: t.category.createdAt.toISOString(),
-      updatedAt: t.category.updatedAt.toISOString(),
-    } : null,
-    bankAccount: t.bankAccount ? {
-      name: t.bankAccount.name,
-      color: t.bankAccount.color
-    } : null
-  };
-};
+    category: t.category
+      ? {
+          id: t.category.id,
+          name: t.category.name,
+          type: t.category.type,
+          userId: t.category.userId,
+          budgetLimit: t.category.budgetLimit ? Number(t.category.budgetLimit) : null,
+          createdAt: t.category.createdAt.toISOString(),
+          updatedAt: t.category.updatedAt.toISOString(),
+        }
+      : null,
+    bankAccount: t.bankAccount
+      ? {
+          name: t.bankAccount.name,
+          color: t.bankAccount.color,
+        }
+      : null,
+  }
+}
 
 export default async function Dashboard(props: DashboardProps) {
-  const user = await getAuthenticatedUser();
-  const userId = user.id;
+  const user = await getAuthenticatedUser()
+  const userId = user.id
 
-  const searchParams = await props.searchParams; 
-  const now = new Date();
-  
-  const selectedMonth = searchParams.month ? Number(searchParams.month) : now.getMonth();
-  const selectedYear = searchParams.year ? Number(searchParams.year) : now.getFullYear();
+  const searchParams = await props.searchParams
+  const now = new Date()
 
-  const startOfMonth = new Date(selectedYear, selectedMonth, 1);
-  const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999); 
-  
-  const monthName = startOfMonth.toLocaleString('pt-BR', { month: 'long' });
-  const isPastMonth = endOfMonth < now;
+  const selectedMonth = searchParams.month ? Number(searchParams.month) : now.getMonth()
+  const selectedYear = searchParams.year ? Number(searchParams.year) : now.getFullYear()
+
+  const startOfMonth = new Date(selectedYear, selectedMonth, 1)
+  const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999)
+
+  const monthName = startOfMonth.toLocaleString("pt-BR", { month: "long" })
+  const isPastMonth = endOfMonth < now
 
   const [
-    rawBankAccounts, 
-    rawCategories, 
-    balanceAggregations, 
-    allMonthlyTransactions, 
-    futureCardTransactions
+    rawBankAccounts,
+    rawCategories,
+    balanceAggregations,
+    allMonthlyTransactions,
+    futureCardTransactions,
   ] = await Promise.all([
     prisma.bankAccount.findMany({
       where: { userId: userId },
-      select: { id: true, name: true, type: true, color: true, includeInTotal: true, initialBalance: true }
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        color: true,
+        includeInTotal: true,
+        initialBalance: true,
+      },
     }),
     prisma.category.findMany({
-      where: { OR: [{ userId: userId }, { userId: null }] }
+      where: { OR: [{ userId: userId }, { userId: null }] },
     }),
     prisma.transaction.groupBy({
-        by: ['bankAccountId', 'type'],
-        _sum: { amount: true },
-        where: { 
-          userId: userId,
-          date: { lte: endOfMonth },
-          paymentMethod: { not: 'CREDIT_CARD' }
-        }
+      by: ["bankAccountId", "type"],
+      _sum: { amount: true },
+      where: {
+        userId: userId,
+        date: { lte: endOfMonth },
+        paymentMethod: { not: "CREDIT_CARD" },
+      },
     }),
     prisma.transaction.findMany({
-        where: {
-            userId: userId,
-            date: { gte: startOfMonth, lte: endOfMonth },
-        },
-        orderBy: { date: 'desc' }, 
-        include: { 
-            category: true,
-            bankAccount: true // Incluindo tudo para satisfazer TransactionWithRelations
-        }
+      where: {
+        userId: userId,
+        date: { gte: startOfMonth, lte: endOfMonth },
+      },
+      orderBy: { date: "desc" },
+      include: {
+        category: true,
+        bankAccount: true, // Incluindo tudo para satisfazer TransactionWithRelations
+      },
     }),
     prisma.transaction.findMany({
-        where: { 
-            userId: userId,
-            date: { gte: startOfMonth },
-            paymentMethod: 'CREDIT_CARD',
-        },
-        select: {
-            id: true, description: true, amount: true, date: true, dueDate: true, paymentMethod: true
-        },
-        orderBy: { date: 'asc' }
-    })
-  ]);
+      where: {
+        userId: userId,
+        date: { gte: startOfMonth },
+        paymentMethod: "CREDIT_CARD",
+      },
+      select: {
+        id: true,
+        description: true,
+        amount: true,
+        date: true,
+        dueDate: true,
+        paymentMethod: true,
+      },
+      orderBy: { date: "asc" },
+    }),
+  ])
 
   // --- PROCESSAMENTO DE DADOS ---
 
-  const bankAccounts = rawBankAccounts.map(acc => ({
+  const bankAccounts = rawBankAccounts.map((acc) => ({
     ...acc,
-    initialBalance: Number(acc.initialBalance)
-  }));
+    initialBalance: Number(acc.initialBalance),
+  }))
 
-  const categories: SafeCategory[] = rawCategories.map(cat => ({
+  const categories: SafeCategory[] = rawCategories.map((cat) => ({
     id: cat.id,
     name: cat.name,
     type: cat.type,
@@ -175,233 +185,245 @@ export default async function Dashboard(props: DashboardProps) {
     budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null,
     createdAt: cat.createdAt.toISOString(),
     updatedAt: cat.updatedAt.toISOString(),
-  }));
-  
+  }))
+
   // Mapeamos para SafeAccount para passar ao TransactionList
-  const safeAccounts: SafeAccount[] = bankAccounts.map(acc => ({
+  const safeAccounts: SafeAccount[] = bankAccounts.map((acc) => ({
     ...acc,
-    initialBalance: Number(acc.initialBalance)
-  }));
+    initialBalance: Number(acc.initialBalance),
+  }))
 
-  const totalsMap: Record<string, number> = {};
-  balanceAggregations.forEach(agg => {
-     if (agg.bankAccountId) {
-        const key = `${agg.bankAccountId}_${agg.type}`;
-        totalsMap[key] = Number(agg._sum.amount || 0);
-     }
-  });
+  const totalsMap: Record<string, number> = {}
+  balanceAggregations.forEach((agg) => {
+    if (agg.bankAccountId) {
+      const key = `${agg.bankAccountId}_${agg.type}`
+      totalsMap[key] = Number(agg._sum.amount || 0)
+    }
+  })
 
-  const accountsWithBalance = bankAccounts.map(acc => {
-      const totalIncome = totalsMap[`${acc.id}_${TransactionType.INCOME}`] || 0;
-      const totalExpense = totalsMap[`${acc.id}_${TransactionType.EXPENSE}`] || 0;
-      return {
-          ...acc,
-          currentBalance: acc.initialBalance + totalIncome - totalExpense
-      };
-  });
+  const accountsWithBalance = bankAccounts.map((acc) => {
+    const totalIncome = totalsMap[`${acc.id}_${TransactionType.INCOME}`] || 0
+    const totalExpense = totalsMap[`${acc.id}_${TransactionType.EXPENSE}`] || 0
+    return {
+      ...acc,
+      currentBalance: acc.initialBalance + totalIncome - totalExpense,
+    }
+  })
 
   const currentBalance = accountsWithBalance
-    .filter(acc => acc.includeInTotal)
-    .reduce((sum, acc) => sum + acc.currentBalance, 0);
+    .filter((acc) => acc.includeInTotal)
+    .reduce((sum, acc) => sum + acc.currentBalance, 0)
 
   const hiddenAccountIds = new Set(
-    bankAccounts.filter(acc => !acc.includeInTotal).map(acc => acc.id)
-  );
+    bankAccounts.filter((acc) => !acc.includeInTotal).map((acc) => acc.id)
+  )
 
-  const monthlyTransactions = allMonthlyTransactions.filter(t => 
-    !t.bankAccountId || !hiddenAccountIds.has(t.bankAccountId)
-  );
+  const monthlyTransactions = allMonthlyTransactions.filter(
+    (t) => !t.bankAccountId || !hiddenAccountIds.has(t.bankAccountId)
+  )
 
   const monthIncome = monthlyTransactions
-    .filter(t => t.type === TransactionType.INCOME)
-    .reduce((acc, t) => acc + Number(t.amount), 0);
+    .filter((t) => t.type === TransactionType.INCOME)
+    .reduce((acc, t) => acc + Number(t.amount), 0)
 
   const monthExpense = monthlyTransactions
-    .filter(t => t.type === TransactionType.EXPENSE)
-    .reduce((acc, t) => acc + Number(t.amount), 0);
-  
-  const startingBalance = currentBalance - monthIncome + monthExpense;
+    .filter((t) => t.type === TransactionType.EXPENSE)
+    .reduce((acc, t) => acc + Number(t.amount), 0)
+
+  const startingBalance = currentBalance - monthIncome + monthExpense
 
   // --- SEPARAÇÃO E CONVERSÃO FINAL ---
 
   // 🟢 Lista Segura: Tipagem SafeTransaction[] garantida
   const listItemsNonCredit: SafeTransaction[] = monthlyTransactions
-    .filter(t => t.paymentMethod !== 'CREDIT_CARD')
-    .map(toClientTransaction); 
+    .filter((t) => t.paymentMethod !== "CREDIT_CARD")
+    .map(toClientTransaction)
 
-  const listItemsCredit = monthlyTransactions.filter(t => t.paymentMethod === 'CREDIT_CARD');
-  const monthlyInvoiceTotal = listItemsCredit.reduce((acc, t) => acc + Number(t.amount), 0);
+  const listItemsCredit = monthlyTransactions.filter((t) => t.paymentMethod === "CREDIT_CARD")
+  const monthlyInvoiceTotal = listItemsCredit.reduce((acc, t) => acc + Number(t.amount), 0)
 
   const chartData: ChartData[] = monthlyTransactions
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .map(t => ({
-      amount: Number(t.amount), 
-      date: t.date.toISOString(), 
+    .map((t) => ({
+      amount: Number(t.amount),
+      date: t.date.toISOString(),
       type: t.type,
-      categoryName: t.category?.name
-    }));
+      categoryName: t.category?.name,
+    }))
 
-  const widgetData = futureCardTransactions.map(t => ({
+  const widgetData = futureCardTransactions.map((t) => ({
     id: t.id,
     description: t.description,
     amount: Number(t.amount),
-    date: t.date,      
-    dueDate: t.dueDate!, 
-    paymentMethod: t.paymentMethod
-  }));
+    date: t.date,
+    dueDate: t.dueDate!,
+    paymentMethod: t.paymentMethod,
+  }))
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-700 pb-20 md:pb-0">
-      
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6 pb-20 duration-700 animate-in fade-in md:pb-0">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white">Visão Geral</h1>
-          <p className="text-xs text-zinc-400 mt-0.5">
-              Resumo financeiro de {startOfMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}.
+          <p className="mt-0.5 text-xs text-zinc-400">
+            Resumo financeiro de{" "}
+            {startOfMonth.toLocaleString("pt-BR", { month: "long", year: "numeric" })}.
           </p>
         </div>
         <MonthSelector />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
         {/* COLUNA ESQUERDA */}
-        <div className="xl:col-span-8 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
+        <div className="space-y-6 xl:col-span-8">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {/* SALDO */}
-            <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 shadow-lg shadow-black/5 rounded-3xl overflow-hidden relative group shadow-none">
-               <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-               <CardContent className="p-5 relative">
-                 <div className="flex justify-between items-start mb-3">
-                    <div>
-                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                          {isPastMonth ? "Saldo Final" : "Disponível"}
-                        </p>
-                        <h2 className={`text-3xl font-bold tracking-tight mt-0.5 ${currentBalance < 0 ? 'text-rose-400' : 'text-white'}`}>
-                            {formatCurrency(currentBalance)}
-                        </h2>
-                    </div>
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/10">
-                        <Wallet size={16} />
-                    </div>
-                 </div>
-                 <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white/5 border border-white/5 p-2.5 rounded-xl">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                          <div className="p-0.5 rounded-full bg-emerald-500/20 text-emerald-400"><ArrowUpRight size={10} /></div>
-                          <span className="text-[9px] text-zinc-400 uppercase font-bold">Entradas</span>
+            <Card className="group relative overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-lg shadow-none shadow-black/5 backdrop-blur-xl">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+              <CardContent className="relative p-5">
+                <div className="mb-3 flex items-start justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                      {isPastMonth ? "Saldo Final" : "Disponível"}
+                    </p>
+                    <h2
+                      className={`mt-0.5 text-3xl font-bold tracking-tight ${currentBalance < 0 ? "text-rose-400" : "text-white"}`}
+                    >
+                      {formatCurrency(currentBalance)}
+                    </h2>
+                  </div>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/10 bg-emerald-500/10 text-emerald-500">
+                    <Wallet size={16} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-white/5 bg-white/5 p-2.5">
+                    <div className="mb-0.5 flex items-center gap-1.5">
+                      <div className="rounded-full bg-emerald-500/20 p-0.5 text-emerald-400">
+                        <ArrowUpRight size={10} />
                       </div>
-                      <p className="text-sm font-semibold text-emerald-400 leading-none">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: "compact" }).format(monthIncome)}
-                      </p>
+                      <span className="text-[9px] font-bold uppercase text-zinc-400">Entradas</span>
                     </div>
-                    <div className="bg-white/5 border border-white/5 p-2.5 rounded-xl">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                          <div className="p-0.5 rounded-full bg-rose-500/20 text-rose-400"><ArrowDownLeft size={10} /></div>
-                          <span className="text-[9px] text-zinc-400 uppercase font-bold">Saídas</span>
+                    <p className="text-sm font-semibold leading-none text-emerald-400">
+                      {new Intl.NumberFormat("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                        notation: "compact",
+                      }).format(monthIncome)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white/5 bg-white/5 p-2.5">
+                    <div className="mb-0.5 flex items-center gap-1.5">
+                      <div className="rounded-full bg-rose-500/20 p-0.5 text-rose-400">
+                        <ArrowDownLeft size={10} />
                       </div>
-                      <p className="text-sm font-semibold text-rose-400 leading-none">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: "compact" }).format(monthExpense)}
-                      </p>
+                      <span className="text-[9px] font-bold uppercase text-zinc-400">Saídas</span>
                     </div>
-                 </div>
-               </CardContent>
+                    <p className="text-sm font-semibold leading-none text-rose-400">
+                      {new Intl.NumberFormat("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                        notation: "compact",
+                      }).format(monthExpense)}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
             </Card>
 
             {/* FATURA */}
-            <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 shadow-lg shadow-black/5 rounded-3xl overflow-hidden relative group shadow-none">
-               <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-               <CardContent className="p-5 relative flex flex-col h-full justify-between">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Fatura Atual</p>
-                      <h3 className="text-3xl font-bold text-white tracking-tight mt-0.5">
-                        {formatCurrency(monthlyInvoiceTotal)}
-                      </h3>
-                    </div>
-                    <PayInvoiceDialog 
-                        key={monthName}
-                        invoiceTotal={monthlyInvoiceTotal}
-                        accounts={accountsWithBalance}
-                        monthName={monthName}
-                    />
+            <Card className="group relative overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-lg shadow-none shadow-black/5 backdrop-blur-xl">
+              <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+              <CardContent className="relative flex h-full flex-col justify-between p-5">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                      Fatura Atual
+                    </p>
+                    <h3 className="mt-0.5 text-3xl font-bold tracking-tight text-white">
+                      {formatCurrency(monthlyInvoiceTotal)}
+                    </h3>
                   </div>
-                  <div className="mt-4">
-                      <div className="flex items-center gap-2 text-zinc-500 text-[10px] bg-white/5 p-2.5 rounded-xl border border-white/5">
-                        <Activity size={12} />
-                        <span>Acumulado no cartão</span>
-                      </div>
+                  <PayInvoiceDialog
+                    key={monthName}
+                    invoiceTotal={monthlyInvoiceTotal}
+                    accounts={accountsWithBalance}
+                    monthName={monthName}
+                  />
+                </div>
+                <div className="mt-4">
+                  <div className="flex items-center gap-2 rounded-xl border border-white/5 bg-white/5 p-2.5 text-[10px] text-zinc-500">
+                    <Activity size={12} />
+                    <span>Acumulado no cartão</span>
                   </div>
-               </CardContent>
+                </div>
+              </CardContent>
             </Card>
           </div>
 
-          <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 shadow-lg shadow-black/5 rounded-3xl overflow-hidden shadow-none">
-             <CardHeader className="border-b border-white/5 px-6 py-4">
-                <CardTitle className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-widest">
-                   <TrendingUp size={14} /> Fluxo de Caixa
-                </CardTitle>
-             </CardHeader>
-             <CardContent className="p-5">
-                <div className="h-[280px] w-full">
-                   <FinancialCharts data={chartData} initialBalance={startingBalance} />
-                </div>
-             </CardContent>
+          <Card className="overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-lg shadow-none shadow-black/5 backdrop-blur-xl">
+            <CardHeader className="border-b border-white/5 px-6 py-4">
+              <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-400">
+                <TrendingUp size={14} /> Fluxo de Caixa
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              <div className="h-[280px] w-full">
+                <FinancialCharts data={chartData} initialBalance={startingBalance} />
+              </div>
+            </CardContent>
           </Card>
 
           {/* LISTA DE TRANSAÇÕES */}
           <div className="space-y-3">
-              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-2">
-                Últimas Movimentações
-              </h3>
-              
-              <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 rounded-3xl overflow-hidden shadow-lg shadow-black/5 flex flex-col">
-                
-                {monthlyInvoiceTotal > 0 && (
-                    <div className="flex-none flex items-center justify-between p-3 px-5 bg-rose-500/5 border-b border-white/5">
-                        <div className="flex items-center gap-3">
-                           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-500/10 text-rose-500">
-                             <Receipt size={14} />
-                           </div>
-                           <div>
-                             <p className="text-xs font-bold text-white">Fatura Cartão</p>
-                             <p className="text-[10px] text-zinc-400">{listItemsCredit.length} compras agrupadas</p>
-                           </div>
-                        </div>
-                        <p className="text-xs font-bold tabular-nums text-rose-400">
-                          - {formatCurrency(monthlyInvoiceTotal)}
-                        </p>
+            <h3 className="px-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+              Últimas Movimentações
+            </h3>
+
+            <Card className="flex flex-col overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-lg shadow-black/5 backdrop-blur-xl">
+              {monthlyInvoiceTotal > 0 && (
+                <div className="flex flex-none items-center justify-between border-b border-white/5 bg-rose-500/5 p-3 px-5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500">
+                      <Receipt size={14} />
                     </div>
-                )}
+                    <div>
+                      <p className="text-xs font-bold text-white">Fatura Cartão</p>
+                      <p className="text-[10px] text-zinc-400">
+                        {listItemsCredit.length} compras agrupadas
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-xs font-bold tabular-nums text-rose-400">
+                    - {formatCurrency(monthlyInvoiceTotal)}
+                  </p>
+                </div>
+              )}
 
-                {/* COMPONENTE CLIENTE COM TIPOS SEGUROS */}
-                <TransactionList 
-                    transactions={listItemsNonCredit} 
-                    categories={categories} 
-                    accounts={safeAccounts} 
-                />
-
-              </Card>
+              {/* COMPONENTE CLIENTE COM TIPOS SEGUROS */}
+              <TransactionList
+                transactions={listItemsNonCredit}
+                categories={categories}
+                accounts={safeAccounts}
+              />
+            </Card>
           </div>
         </div>
 
         {/* COLUNA DIREITA */}
-        <div className="xl:col-span-4 space-y-6">
-           <BankAccountsWidget accounts={accountsWithBalance} />
-           
-           <Card className="bg-zinc-900/40 backdrop-blur-xl border-white/5 rounded-3xl overflow-hidden p-1 shadow-lg shadow-none">
-               <DashboardTabs categories={categories} accounts={bankAccounts} />
-           </Card>
+        <div className="space-y-6 xl:col-span-4">
+          <BankAccountsWidget accounts={accountsWithBalance} />
 
-           <CreditCardWidget 
-              transactions={widgetData} 
-              accounts={accountsWithBalance} 
-           />
+          <Card className="overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 p-1 shadow-lg shadow-none backdrop-blur-xl">
+            <DashboardTabs categories={categories} accounts={bankAccounts} />
+          </Card>
+
+          <CreditCardWidget transactions={widgetData} accounts={accountsWithBalance} />
         </div>
       </div>
     </div>
-  );
+  )
 }

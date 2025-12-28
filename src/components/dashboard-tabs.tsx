@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TransactionForm } from "@/components/transaction-form"
+import { useEffect, useState } from "react"
+
 import { BankStatementImporter } from "@/components/bank-statement-importer"
+import { TransactionForm } from "@/components/transaction-form"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 // --- DEFINIÇÃO DE TIPOS (Para remover os 'any') ---
 
@@ -45,27 +46,27 @@ export function DashboardTabs({ categories, accounts }: DashboardTabsProps) {
 
   return (
     <Tabs defaultValue="manual" className="w-full">
-      <TabsList className="grid w-full grid-cols-2 bg-zinc-950/50 p-1 rounded-2xl h-9 mb-1">
-        <TabsTrigger 
-            value="manual" 
-            className="rounded-xl text-[10px] font-bold uppercase tracking-wide data-[state=active]:bg-zinc-800 data-[state=active]:text-white"
+      <TabsList className="mb-1 grid h-9 w-full grid-cols-2 rounded-2xl bg-zinc-950/50 p-1">
+        <TabsTrigger
+          value="manual"
+          className="rounded-xl text-[10px] font-bold uppercase tracking-wide data-[state=active]:bg-zinc-800 data-[state=active]:text-white"
         >
-            Manual
+          Manual
         </TabsTrigger>
-        <TabsTrigger 
-            value="import" 
-            className="rounded-xl text-[10px] font-bold uppercase tracking-wide data-[state=active]:bg-zinc-800 data-[state=active]:text-white"
+        <TabsTrigger
+          value="import"
+          className="rounded-xl text-[10px] font-bold uppercase tracking-wide data-[state=active]:bg-zinc-800 data-[state=active]:text-white"
         >
-            Importar
+          Importar
         </TabsTrigger>
       </TabsList>
-      
+
       <div className="p-1">
         <TabsContent value="manual" className="mt-0">
-            <TransactionForm categories={categories} accounts={accounts} />
+          <TransactionForm categories={categories} accounts={accounts} />
         </TabsContent>
         <TabsContent value="import" className="mt-0">
-            <BankStatementImporter categories={categories} />
+          <BankStatementImporter categories={categories} />
         </TabsContent>
       </div>
     </Tabs>

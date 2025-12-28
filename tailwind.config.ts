@@ -3,13 +3,13 @@ import tailwindAnimate from "tailwindcss-animate"
 
 const config = {
   // CORREÇÃO 1: Use string direta para a estratégia 'class'
-  darkMode: "class", 
-  
+  darkMode: "class",
+
   content: [
-    './pages/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
-    './app/**/*.{ts,tsx}',
-    './src/**/*.{ts,tsx}',
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
   ],
   prefix: "",
   theme: {

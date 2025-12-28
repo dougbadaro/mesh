@@ -15,11 +15,11 @@ export const authConfig = {
     // Lógica de proteção de rotas (Middleware)
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user
-      const isOnLogin = nextUrl.pathname.startsWith('/login')
-      
+      const isOnLogin = nextUrl.pathname.startsWith("/login")
+
       // Se estiver na página de Login e já estiver logado -> Manda pra Home
       if (isOnLogin) {
-        if (isLoggedIn) return Response.redirect(new URL('/', nextUrl))
+        if (isLoggedIn) return Response.redirect(new URL("/", nextUrl))
         return true
       }
 
@@ -36,6 +36,6 @@ export const authConfig = {
         session.user.id = token.sub
       }
       return session
-    }
+    },
   },
 } satisfies NextAuthConfig

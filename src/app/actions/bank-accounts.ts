@@ -1,10 +1,12 @@
-'use server'
+"use server"
 
-import { auth } from "@/auth"
-import { prisma } from "@/lib/prisma"
+import { PaymentMethod, Prisma, TransactionType } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
-import { TransactionType, PaymentMethod, Prisma } from "@prisma/client" 
+
+import { prisma } from "@/lib/prisma"
+
+import { auth } from "@/auth"
 
 // --- SCHEMAS ---
 const bankAccountSchema = z.object({
@@ -14,41 +16,41 @@ const bankAccountSchema = z.object({
   color: z.string().optional(),
   migrateLegacy: z.boolean().optional(),
   includeInTotal: z.boolean().optional(),
-  targetBalance: z.number().optional()
+  targetBalance: z.number().optional(),
 })
 
 // --- TIPO ESTRITO PARA A FUNÇÃO DE CÁLCULO ---
 type TransactionSubset = {
-    amount: Prisma.Decimal | number; 
-    type: TransactionType;
-    paymentMethod: PaymentMethod;
-    date: Date;
+  amount: Prisma.Decimal | number
+  type: TransactionType
+  paymentMethod: PaymentMethod
+  date: Date
 }
 
 // --- FUNÇÃO DE CÁLCULO (A que estava faltando) ---
 function calculateRealBalance(initial: number, transactions: TransactionSubset[]) {
   // Define o "agora" como o FINAL do dia de hoje para incluir todas as transações de hoje
-  const cutoffDate = new Date();
-  cutoffDate.setHours(23, 59, 59, 999); 
+  const cutoffDate = new Date()
+  cutoffDate.setHours(23, 59, 59, 999)
 
   return transactions.reduce((acc, t) => {
     // 1. Ignora transações futuras
-    if (new Date(t.date) > cutoffDate) return acc;
+    if (new Date(t.date) > cutoffDate) return acc
 
     // 2. Ignora Cartão de Crédito
-    if (t.paymentMethod === 'CREDIT_CARD') return acc;
+    if (t.paymentMethod === "CREDIT_CARD") return acc
 
-    const amount = Number(t.amount);
+    const amount = Number(t.amount)
 
-    if (t.type === 'INCOME') {
-      return acc + amount;
-    } 
-    if (t.type === 'EXPENSE') {
-      return acc - amount;
+    if (t.type === "INCOME") {
+      return acc + amount
     }
-    
-    return acc;
-  }, Number(initial));
+    if (t.type === "EXPENSE") {
+      return acc - amount
+    }
+
+    return acc
+  }, Number(initial))
 }
 
 // --- ACTIONS ---
@@ -77,23 +79,22 @@ export async function createBankAccount(formData: FormData) {
         initialBalance: result.data.initialBalance,
         type: result.data.type,
         color: result.data.color || "#10b981",
-        includeInTotal: result.data.includeInTotal
-      }
+        includeInTotal: result.data.includeInTotal,
+      },
     })
 
     let migratedCount = 0
     if (result.data.migrateLegacy) {
       const updateResult = await prisma.transaction.updateMany({
         where: { userId: session.user.id, bankAccountId: null },
-        data: { bankAccountId: newAccount.id }
+        data: { bankAccountId: newAccount.id },
       })
       migratedCount = updateResult.count
     }
 
     revalidatePath("/settings")
-    revalidatePath("/") 
+    revalidatePath("/")
     return { success: true, migratedCount }
-
   } catch (error) {
     console.error("Erro ao criar carteira:", error)
     return { error: "Erro interno ao criar carteira." }
@@ -116,11 +117,11 @@ export async function updateBankAccount(id: string, formData: FormData) {
   try {
     const account = await prisma.bankAccount.findUnique({
       where: { id, userId: session.user.id },
-      include: { 
-          transactions: { 
-              select: { amount: true, type: true, paymentMethod: true, date: true } 
-          } 
-      }
+      include: {
+        transactions: {
+          select: { amount: true, type: true, paymentMethod: true, date: true },
+        },
+      },
     })
 
     if (!account) return { error: "Conta não encontrada." }
@@ -131,45 +132,47 @@ export async function updateBankAccount(id: string, formData: FormData) {
         name: String(rawData.name),
         type: String(rawData.type),
         color: String(rawData.color),
-        includeInTotal: rawData.includeInTotal
-      }
+        includeInTotal: rawData.includeInTotal,
+      },
     })
 
     let migratedCount = 0
     if (rawData.migrateLegacy) {
-         const updateResult = await prisma.transaction.updateMany({
-            where: { userId: session.user.id, bankAccountId: null },
-            data: { bankAccountId: id }
-         })
-         migratedCount = updateResult.count
+      const updateResult = await prisma.transaction.updateMany({
+        where: { userId: session.user.id, bankAccountId: null },
+        data: { bankAccountId: id },
+      })
+      migratedCount = updateResult.count
     }
 
     if (!rawData.migrateLegacy) {
-        const currentBalance = calculateRealBalance(Number(account.initialBalance), account.transactions);
-    
-        const difference = rawData.targetBalance - currentBalance
+      const currentBalance = calculateRealBalance(
+        Number(account.initialBalance),
+        account.transactions
+      )
 
-        if (Math.abs(difference) >= 0.01) {
-          const isPositive = difference > 0
-          
-          await prisma.transaction.create({
-            data: {
-              userId: session.user.id,
-              bankAccountId: id,
-              amount: Math.abs(difference),
-              type: isPositive ? 'INCOME' : 'EXPENSE',
-              description: 'Ajuste Manual de Saldo',
-              date: new Date(), 
-              paymentMethod: 'OTHER', 
-            }
-          })
-        }
+      const difference = rawData.targetBalance - currentBalance
+
+      if (Math.abs(difference) >= 0.01) {
+        const isPositive = difference > 0
+
+        await prisma.transaction.create({
+          data: {
+            userId: session.user.id,
+            bankAccountId: id,
+            amount: Math.abs(difference),
+            type: isPositive ? "INCOME" : "EXPENSE",
+            description: "Ajuste Manual de Saldo",
+            date: new Date(),
+            paymentMethod: "OTHER",
+          },
+        })
+      }
     }
 
     revalidatePath("/settings")
-    revalidatePath("/") 
+    revalidatePath("/")
     return { success: true, migratedCount }
-
   } catch (error) {
     console.error("Erro ao atualizar:", error)
     return { error: "Erro ao atualizar conta." }
@@ -182,62 +185,62 @@ export async function getUserBankAccounts() {
 
   const accounts = await prisma.bankAccount.findMany({
     where: { userId: session.user.id },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: "asc" },
     include: {
-        transactions: {
-            select: { amount: true, type: true, paymentMethod: true, date: true }
-        }
-    }
+      transactions: {
+        select: { amount: true, type: true, paymentMethod: true, date: true },
+      },
+    },
   })
 
-  return accounts.map(acc => {
+  return accounts.map((acc) => {
     // Aqui usamos a função calculateRealBalance que agora está definida no topo
-    const balance = calculateRealBalance(Number(acc.initialBalance), acc.transactions);
+    const balance = calculateRealBalance(Number(acc.initialBalance), acc.transactions)
 
     return {
-        id: acc.id,
-        name: acc.name,
-        type: acc.type,
-        color: acc.color,
-        includeInTotal: acc.includeInTotal,
-        initialBalance: Number(acc.initialBalance),
-        currentBalance: balance,
-        transactionCount: acc.transactions.length // Usado para avisar no delete
+      id: acc.id,
+      name: acc.name,
+      type: acc.type,
+      color: acc.color,
+      includeInTotal: acc.includeInTotal,
+      initialBalance: Number(acc.initialBalance),
+      currentBalance: balance,
+      transactionCount: acc.transactions.length, // Usado para avisar no delete
     }
   })
 }
 
 // DELETE ATUALIZADO (Aceita apagar transações)
 export async function deleteBankAccount(accountId: string, deleteTransactions: boolean = false) {
-    const session = await auth()
-    if (!session?.user?.id) return { error: "Não autorizado" }
+  const session = await auth()
+  if (!session?.user?.id) return { error: "Não autorizado" }
 
-    try {
-        const account = await prisma.bankAccount.findUnique({
-            where: { id: accountId }
-        })
+  try {
+    const account = await prisma.bankAccount.findUnique({
+      where: { id: accountId },
+    })
 
-        if (!account || account.userId !== session.user.id) {
-            return { error: "Conta não encontrada." }
-        }
-
-        if (deleteTransactions) {
-            // Apaga todas as transações vinculadas
-            await prisma.transaction.deleteMany({
-                where: { bankAccountId: accountId }
-            })
-        }
-        // Se deleteTransactions for false, as transações ficam com bankAccountId=null automaticamente
-
-        await prisma.bankAccount.delete({
-            where: { id: accountId }
-        })
-
-        revalidatePath("/settings")
-        revalidatePath("/")
-        return { success: true }
-    } catch (error) {
-        console.error("Erro ao deletar:", error)
-        return { error: "Erro ao deletar conta." }
+    if (!account || account.userId !== session.user.id) {
+      return { error: "Conta não encontrada." }
     }
+
+    if (deleteTransactions) {
+      // Apaga todas as transações vinculadas
+      await prisma.transaction.deleteMany({
+        where: { bankAccountId: accountId },
+      })
+    }
+    // Se deleteTransactions for false, as transações ficam com bankAccountId=null automaticamente
+
+    await prisma.bankAccount.delete({
+      where: { id: accountId },
+    })
+
+    revalidatePath("/settings")
+    revalidatePath("/")
+    return { success: true }
+  } catch (error) {
+    console.error("Erro ao deletar:", error)
+    return { error: "Erro ao deletar conta." }
+  }
 }

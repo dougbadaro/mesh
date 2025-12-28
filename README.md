@@ -30,6 +30,7 @@ Este projeto foi construído utilizando uma stack moderna e robusta:
 ## 🛠️ Pré-requisitos
 
 Antes de começar, você precisará ter instalado em sua máquina:
+
 - [Node.js](https://nodejs.org/) (Versão 18 ou superior)
 - Gerenciador de pacotes (NPM ou Yarn)
 
@@ -39,3 +40,4 @@ Antes de começar, você precisará ter instalado em sua máquina:
    ```bash
    git clone [https://github.com/SEU-USUARIO/mesh.git](https://github.com/SEU-USUARIO/mesh.git)
    cd mesh
+   ```

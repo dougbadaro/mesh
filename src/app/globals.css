@@ -10,11 +10,11 @@
     --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
-    
+
     /* Verde Emerald (Light Mode) */
-    --primary: 158 64% 40%; 
+    --primary: 158 64% 40%;
     --primary-foreground: 0 0% 98%;
-    
+
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
     --muted: 240 4.8% 95.9%;
@@ -32,17 +32,17 @@
   .dark {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
-    
+
     /* Nossos fundos Glassmorphism usam muito Zinc-900/950 */
     --card: 240 10% 3.9%;
     --card-foreground: 0 0% 98%;
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
-    
+
     /* Verde Emerald (Dark Mode - Um pouco mais vibrante) */
     --primary: 158 64% 52%; /* #10b981 */
     --primary-foreground: 144.9 80.4% 10%; /* Texto escuro sobre o verde */
-    
+
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
     --muted: 240 3.7% 15.9%;
@@ -60,7 +60,7 @@
 @layer base {
   * {
     /* Substituímos @apply border-border por CSS nativo para evitar o erro de build */
-    border-color: hsl(var(--border)); 
+    border-color: hsl(var(--border));
     border-style: solid; /* Garante que a borda apareça se houver width */
   }
   body {
@@ -74,7 +74,7 @@
 
   /* Chrome, Edge, Safari */
   *::-webkit-scrollbar {
-    width: 6px;  /* Largura vertical bem fina */
+    width: 6px; /* Largura vertical bem fina */
     height: 6px; /* Altura horizontal bem fina */
   }
 
@@ -84,7 +84,7 @@
 
   *::-webkit-scrollbar-thumb {
     background-color: #27272a; /* Cor do "pino" (zinc-800) */
-    border-radius: 20px;       /* Totalmente arredondado */
+    border-radius: 20px; /* Totalmente arredondado */
   }
 
   *::-webkit-scrollbar-thumb:hover {
