@@ -12,12 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 import { getAuthenticatedUser } from "@/lib/auth-check"
 import { prisma } from "@/lib/prisma"
-import {
-  SafeAccount,
-  SafeCategory,
-  SafeTransaction,
-  toSafeTransaction,
-} from "@/lib/transformers"
+import { checkAndGenerateRecurringTransactions } from "@/lib/recurring-job"
+import { SafeAccount, SafeCategory, SafeTransaction, toSafeTransaction } from "@/lib/transformers"
 
 interface DashboardProps {
   searchParams: Promise<{ month?: string; year?: string }>
@@ -26,6 +22,8 @@ interface DashboardProps {
 export default async function Dashboard(props: DashboardProps) {
   const user = await getAuthenticatedUser()
   const userId = user.id
+
+  await checkAndGenerateRecurringTransactions(userId)
 
   const searchParams = await props.searchParams
   const now = new Date()
@@ -189,7 +187,7 @@ export default async function Dashboard(props: DashboardProps) {
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
 
   return (
-    <div className="animate-in fade-in space-y-6 pb-20 duration-700 md:pb-0">
+    <div className="space-y-6 pb-20 duration-700 animate-in fade-in md:pb-0">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white">Visão Geral</h1>

@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils"
 import { editRecurring, stopRecurring } from "@/app/actions/recurring"
 
+// Interfaces alinhadas com o SafeCategory/SafeAccount do transformers
 interface Category {
   id: string
   name: string
@@ -32,9 +33,9 @@ interface Account {
 interface RecurringData {
   id: string
   description: string
-  amount: number | string | { toNumber: () => number }
+  amount: number
   paymentMethod: string
-  startDate: Date
+  startDate: string | Date
   categoryId?: string | null
   category: { name: string } | null
   bankAccountId?: string | null
@@ -52,18 +53,17 @@ export function RecurringItem({ data, accounts, categories }: RecurringItemProps
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const safeAmount = (val: number | string | { toNumber: () => number }) => {
-    if (typeof val === "number") return val
-    if (typeof val === "string") return Number(val)
-    if (typeof val === "object" && val !== null && "toNumber" in val) return val.toNumber()
-    return 0
-  }
-
-  const initialAmount = safeAmount(data.amount)
+  // Como sanitizamos no page.tsx, data.amount já é number
+  const initialAmount = data.amount
 
   const [amountValue, setAmountValue] = useState(initialAmount)
   const [description, setDescription] = useState(data.description)
-  const [dateValue, setDateValue] = useState(new Date(data.startDate).toISOString().split("T")[0])
+
+  // Garante que a data inicialize corretamente independente de ser string ou Date
+  const [dateValue, setDateValue] = useState(
+    () => new Date(data.startDate).toISOString().split("T")[0]
+  )
+
   const [bankAccountId, setBankAccountId] = useState(data.bankAccountId || "none")
   const [categoryId, setCategoryId] = useState(data.categoryId || "general")
 
@@ -92,7 +92,6 @@ export function RecurringItem({ data, accounts, categories }: RecurringItemProps
     setCategoryId(data.categoryId || "general")
   }
 
-  // AÇÃO DE SALVAR (Programática para evitar <form>)
   const onSave = async () => {
     setIsSaving(true)
     const formData = new FormData()
@@ -114,7 +113,6 @@ export function RecurringItem({ data, accounts, categories }: RecurringItemProps
     }
   }
 
-  // AÇÃO DE EXCLUIR (Programática)
   const onDelete = async () => {
     if (!confirm("Deseja encerrar esta assinatura e apagar lançamentos futuros?")) return
 

@@ -15,16 +15,19 @@ O **Mesh Finance** é um sistema de gestão financeira inteligente focado em **p
 ## ✨ Funcionalidades Principais
 
 ### 📊 Dashboard & Analytics
+
 - Visão unificada de saldo atual e fluxo de caixa mensal.
 - Gráficos interativos (Recharts) com design translúcido.
 - Filtros inteligentes por período e categorias.
 
 ### 💳 Gestão Avançada de Crédito
+
 - **Lógica de Fatura Real:** Cálculo automático baseado em datas de fechamento (Dia 08) e vencimento (Dia 10).
 - **Parcelamento Inteligente:** Lançamento automático de compras parceladas nas faturas futuras.
 - **Visão Focada:** Projeção de gastos limitada aos próximos 3 meses para foco financeiro.
 
 ### 🔄 Recorrência & Organização
+
 - **Assinaturas:** Controle de pagamentos fixos (Netflix, Aluguel, etc.) com projeção futura.
 - **Categorização:** Sistema flexível de categorias e contas bancárias.
 - **Multi-tenancy:** Isolamento total de dados por usuário (cada conta Google vê apenas seus dados).
@@ -35,16 +38,16 @@ O **Mesh Finance** é um sistema de gestão financeira inteligente focado em **p
 
 O projeto utiliza o que há de mais recente no ecossistema web (2025 Standard):
 
-| Categoria | Tecnologia |
-| :--- | :--- |
-| **Framework** | [Next.js 15](https://nextjs.org/) (App Router & Server Actions) |
-| **Linguagem** | [TypeScript](https://www.typescriptlang.org/) (Strict Mode) |
-| **Estilização** | [Tailwind CSS](https://tailwindcss.com/) + [Shadcn/ui](https://ui.shadcn.com/) |
+| Categoria          | Tecnologia                                                                            |
+| :----------------- | :------------------------------------------------------------------------------------ |
+| **Framework**      | [Next.js 15](https://nextjs.org/) (App Router & Server Actions)                       |
+| **Linguagem**      | [TypeScript](https://www.typescriptlang.org/) (Strict Mode)                           |
+| **Estilização**    | [Tailwind CSS](https://tailwindcss.com/) + [Shadcn/ui](https://ui.shadcn.com/)        |
 | **Banco de Dados** | [PostgreSQL](https://www.postgresql.org/) via [Neon](https://neon.tech/) (Serverless) |
-| **ORM** | [Prisma](https://www.prisma.io/) (v6+) |
-| **Autenticação** | [Auth.js](https://authjs.dev/) (v5 Beta) |
-| **Validação** | [Zod](https://zod.dev/) |
-| **Formatação** | ESLint + Prettier + Simple Import Sort |
+| **ORM**            | [Prisma](https://www.prisma.io/) (v6+)                                                |
+| **Autenticação**   | [Auth.js](https://authjs.dev/) (v5 Beta)                                              |
+| **Validação**      | [Zod](https://zod.dev/)                                                               |
+| **Formatação**     | ESLint + Prettier + Simple Import Sort                                                |
 
 ---
 
@@ -62,12 +65,14 @@ Certifique-se de ter instalado:
 ## 📦 Instalação e Configuração
 
 ### 1. Clone o repositório
+
 ```bash
 git clone https://github.com/SEU-USUARIO/mesh.git
 cd mesh
 ```
 
 ### 2. Instale as dependências
+
 ```bash
 npm install
 # ou
@@ -92,12 +97,14 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
 ### 4. Configure o Banco de Dados
+
 ```bash
 npx prisma generate
 npx prisma db push
 ```
 
 ### 5. Execute o projeto
+
 ```bash
 npm run dev
 ```

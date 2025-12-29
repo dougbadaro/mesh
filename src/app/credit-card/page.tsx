@@ -18,12 +18,7 @@ import { Card, CardContent } from "@/components/ui/card"
 
 import { getAuthenticatedUser } from "@/lib/auth-check"
 import { prisma } from "@/lib/prisma"
-import {
-  SafeAccount,
-  SafeCategory,
-  SafeTransaction,
-  toSafeTransaction,
-} from "@/lib/transformers"
+import { SafeAccount, SafeCategory, SafeTransaction, toSafeTransaction } from "@/lib/transformers"
 import { cn } from "@/lib/utils"
 
 interface CreditCardPageProps {

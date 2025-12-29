@@ -3,19 +3,26 @@ import Link from "next/link"
 
 import { CreateRecurringSheet } from "@/components/create-recurring-sheet"
 import { RecurringItem } from "@/components/recurring-item"
-// Componentes Shadcn
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 
 import { getAuthenticatedUser } from "@/lib/auth-check"
 import { prisma } from "@/lib/prisma"
+import { checkAndGenerateRecurringTransactions } from "@/lib/recurring-job"
+import { SafeAccount } from "@/lib/transformers"
 
 export default async function RecurringPage() {
   const user = await getAuthenticatedUser()
 
-  // 1. Busca de Recorrências
+  // 🔄 Garante que as recorrências futuras existam (mínimo 1 ano)
+  await checkAndGenerateRecurringTransactions(user.id)
+
   const recurringsRaw = await prisma.recurringTransaction.findMany({
-    where: { userId: user.id, active: true },
+    where: {
+      userId: user.id,
+      active: true,
+      deletedAt: null,
+    },
     include: {
       category: true,
       bankAccount: { select: { name: true, color: true } },
@@ -23,30 +30,42 @@ export default async function RecurringPage() {
     orderBy: { startDate: "asc" },
   })
 
-  // 2. Busca de Categorias
   const rawCategories = await prisma.category.findMany({
     where: { OR: [{ userId: user.id }, { userId: null }] },
   })
 
-  // 3. Busca de Carteiras
-  const bankAccounts = await prisma.bankAccount.findMany({
+  const rawBankAccounts = await prisma.bankAccount.findMany({
     where: { userId: user.id },
-    select: { id: true, name: true, color: true },
   })
 
-  // --- SANITIZAÇÃO DE DADOS ---
+  const bankAccounts: SafeAccount[] = rawBankAccounts.map((acc) => ({
+    ...acc,
+    initialBalance: Number(acc.initialBalance),
+  }))
+
   const categories = rawCategories.map((cat) => ({
-    ...cat,
+    id: cat.id,
+    name: cat.name,
+    type: cat.type,
+    userId: cat.userId,
     budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null,
+    createdAt: cat.createdAt.toISOString(),
+    updatedAt: cat.updatedAt.toISOString(),
   }))
 
   const recurrings = recurringsRaw.map((rec) => ({
     ...rec,
     amount: Number(rec.amount),
+    startDate: rec.startDate.toISOString(),
+    createdAt: rec.createdAt.toISOString(),
+    updatedAt: rec.updatedAt.toISOString(),
+    deletedAt: rec.deletedAt ? rec.deletedAt.toISOString() : null,
     category: rec.category
       ? {
           ...rec.category,
           budgetLimit: rec.category.budgetLimit ? Number(rec.category.budgetLimit) : null,
+          createdAt: rec.category.createdAt.toISOString(),
+          updatedAt: rec.category.updatedAt.toISOString(),
         }
       : null,
   }))
@@ -58,7 +77,6 @@ export default async function RecurringPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 pb-24 duration-700 animate-in fade-in md:p-6">
-      {/* HEADER E NAVEGAÇÃO - Compacto */}
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div className="flex items-center gap-3">
           <Button
@@ -86,7 +104,6 @@ export default async function RecurringPage() {
         </CreateRecurringSheet>
       </div>
 
-      {/* KPI - Glassmorphism & Compact */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card className="overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-sm backdrop-blur-xl">
           <CardContent className="flex items-center gap-4 p-5">
@@ -122,7 +139,6 @@ export default async function RecurringPage() {
         </Card>
       </div>
 
-      {/* LISTA */}
       <div className="space-y-3">
         <h3 className="px-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
           Suas Assinaturas
@@ -149,7 +165,7 @@ export default async function RecurringPage() {
                 key={rec.id}
                 data={rec}
                 accounts={bankAccounts}
-                categories={categories} // Passando categorias para permitir edição completa
+                categories={categories}
               />
             ))}
           </div>

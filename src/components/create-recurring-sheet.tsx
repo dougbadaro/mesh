@@ -1,17 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import {
-  AlignLeft,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  Calendar,
-  CreditCard,
-  Loader2,
-  Plus,
-  Tag,
-  Wallet,
-} from "lucide-react"
+import { useState } from "react"
+import { CalendarClock, CreditCard, Loader2, Plus, Repeat, Tag, Wallet } from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,54 +23,33 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
+import { SafeAccount, SafeCategory } from "@/lib/transformers"
 import { cn } from "@/lib/utils"
-import { createTransaction } from "@/app/actions/transactions"
-
-// --- INTERFACES ---
-interface CategoryDTO {
-  id: string
-  name: string
-  type: string
-  budgetLimit: number | null
-  userId: string | null
-  createdAt: Date
-  updatedAt: Date
-}
-
-interface AccountDTO {
-  id: string
-  name: string
-}
+import { createRecurring } from "@/app/actions/recurring"
 
 interface CreateRecurringSheetProps {
-  categories: CategoryDTO[]
-  accounts: AccountDTO[]
   children: React.ReactNode
+  categories: SafeCategory[]
+  accounts: SafeAccount[]
 }
 
 export function CreateRecurringSheet({
-  categories,
-  accounts = [],
   children,
+  categories,
+  accounts,
 }: CreateRecurringSheetProps) {
   const [open, setOpen] = useState(false)
-  const [isMounted, setIsMounted] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isPending, setIsPending] = useState(false)
 
-  // --- ESTADOS ---
-  const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE")
   const [amount, setAmount] = useState(0)
-  const [amountDisplay, setAmountDisplay] = useState("") // Começa vazio para mostrar placeholder
+  const [amountDisplay, setAmountDisplay] = useState("R$ 0,00")
   const [description, setDescription] = useState("")
-  const [day, setDay] = useState("5")
-  const [categoryId, setCategoryId] = useState("general")
+  const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0])
+  const [frequency, setFrequency] = useState("MONTHLY")
   const [paymentMethod, setPaymentMethod] = useState("CREDIT_CARD")
+  const [type, setType] = useState("EXPENSE")
+  const [categoryId, setCategoryId] = useState("general")
   const [bankAccountId, setBankAccountId] = useState("none")
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsMounted(true), 0)
-    return () => clearTimeout(timer)
-  }, [])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, "")
@@ -90,166 +60,137 @@ export function CreateRecurringSheet({
     )
   }
 
-  const handleSubmit = async () => {
-    if (amount <= 0) return
-    setIsLoading(true)
-
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, "0")
-    const selectedDay = String(day).padStart(2, "0")
-    const fullDate = `${year}-${month}-${selectedDay}`
-
-    const formData = new FormData()
-    formData.append(
-      "description",
-      description || (type === "INCOME" ? "Receita Fixa" : "Despesa Fixa")
-    )
-    formData.append("amount", amount.toString())
-    formData.append("type", type)
-    formData.append("date", fullDate)
-    formData.append("paymentMethod", paymentMethod)
-    formData.append("isRecurring", "true")
-
-    if (bankAccountId !== "none") {
-      formData.append("bankAccountId", bankAccountId)
-    }
-
-    if (categoryId !== "general") {
-      formData.append("categoryId", categoryId)
-    }
-
-    try {
-      await createTransaction(formData)
-      setOpen(false)
-
-      // Resetar form
-      setAmount(0)
-      setAmountDisplay("")
-      setDescription("")
-      setDay("5")
-      setBankAccountId("none")
-    } catch (error) {
-      console.error(error)
-    } finally {
-      setIsLoading(false)
-    }
+  const resetForm = () => {
+    setAmount(0)
+    setAmountDisplay("R$ 0,00")
+    setDescription("")
+    setStartDate(new Date().toISOString().split("T")[0])
+    setFrequency("MONTHLY")
+    setPaymentMethod("CREDIT_CARD")
+    setType("EXPENSE")
+    setCategoryId("general")
+    setBankAccountId("none")
   }
 
-  if (!isMounted) return <>{children}</>
+  const handleSubmit = async (formData: FormData) => {
+    setIsPending(true)
+
+    formData.set("amount", amount.toString())
+    formData.set("description", description)
+    formData.set("startDate", startDate)
+    formData.set("frequency", frequency)
+    formData.set("paymentMethod", paymentMethod)
+    formData.set("type", type)
+    formData.set("categoryId", categoryId === "general" ? "" : categoryId)
+    formData.set("bankAccountId", bankAccountId === "none" ? "" : bankAccountId)
+
+    try {
+      await createRecurring(formData)
+      toast.success("Recorrência criada com sucesso!")
+      setOpen(false)
+      resetForm()
+    } catch {
+      toast.error("Erro ao criar recorrência")
+    } finally {
+      setIsPending(false)
+    }
+  }
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-
       <SheetContent className="flex h-full w-full flex-col border-l border-white/5 bg-zinc-950/90 p-0 shadow-2xl backdrop-blur-xl sm:max-w-md">
         <SheetHeader className="border-b border-white/5 bg-transparent p-5 pb-2">
           <SheetTitle className="text-center text-base font-semibold text-white">
-            Nova Assinatura
+            Nova Assinatura / Fixo
           </SheetTitle>
         </SheetHeader>
 
-        <div className="custom-scrollbar flex-1 space-y-6 overflow-y-auto p-5 pb-32">
-          {/* SEÇÃO DE VALOR E TIPO */}
-          <div className="flex flex-col items-center gap-4">
-            {/* Segmented Control */}
-            <div className="flex w-full max-w-[220px] rounded-lg border border-white/5 bg-zinc-900/80 p-1">
-              <button
-                type="button"
-                onClick={() => setType("INCOME")}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-bold uppercase tracking-wider transition-all",
-                  type === "INCOME"
-                    ? "border border-emerald-500/20 bg-emerald-500/20 text-emerald-400 shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-300"
-                )}
-              >
-                <ArrowUpCircle size={14} /> Receita
-              </button>
-              <button
-                type="button"
-                onClick={() => setType("EXPENSE")}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-bold uppercase tracking-wider transition-all",
-                  type === "EXPENSE"
-                    ? "border border-rose-500/20 bg-rose-500/20 text-rose-400 shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-300"
-                )}
-              >
-                <ArrowDownCircle size={14} /> Despesa
-              </button>
-            </div>
-
-            <div className="relative w-full text-center">
-              <Input
-                type="text"
-                inputMode="numeric"
-                placeholder="R$ 0,00"
-                value={amountDisplay}
-                onChange={handleAmountChange}
-                className={cn(
-                  "h-16 border-none bg-transparent p-0 text-center text-4xl font-bold tabular-nums tracking-tight selection:bg-white/20 placeholder:text-zinc-800 focus-visible:ring-0",
-                  type === "INCOME" ? "text-emerald-400" : "text-white"
-                )}
-              />
-              <p className="-mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                Valor Mensal
-              </p>
-            </div>
-          </div>
-
-          {/* CAMPOS (Grouped List) */}
-          <div className="overflow-hidden rounded-2xl border border-white/5 bg-zinc-900/30 backdrop-blur-md">
-            {/* DESCRIÇÃO */}
-            <div className="border-b border-white/5 p-3">
-              <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                Descrição
-              </Label>
-              <div className="relative mt-1">
-                <div className="absolute left-3 top-2.5 text-zinc-500">
-                  <AlignLeft size={16} />
-                </div>
+        <form action={handleSubmit} className="custom-scrollbar flex-1 overflow-y-auto">
+          <div className="space-y-6 p-5 pb-32">
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative w-full text-center">
                 <Input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Ex: Netflix"
-                  className="h-10 border-none bg-transparent pl-10 text-sm placeholder:text-zinc-700 focus-visible:ring-0"
+                  type="text"
+                  inputMode="numeric"
+                  value={amountDisplay}
+                  onChange={handleAmountChange}
+                  className={cn(
+                    "h-16 border-none bg-transparent p-0 text-center text-4xl font-bold tabular-nums tracking-tight selection:bg-white/20 placeholder:text-zinc-800 focus-visible:ring-0",
+                    type === "INCOME" ? "text-emerald-400" : "text-white"
+                  )}
                 />
+                <p className="-mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                  Valor Mensal
+                </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 divide-x divide-white/5 border-b border-white/5">
-              {/* DIA VENCIMENTO */}
-              <div className="p-3">
+            <div className="overflow-hidden rounded-2xl border border-white/5 bg-zinc-900/30 backdrop-blur-md">
+              <div className="border-b border-white/5 p-3">
                 <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                  Dia Venc.
+                  Nome do Gasto
                 </Label>
                 <div className="relative mt-1">
-                  <div className="absolute left-3 top-2.5 text-zinc-500">
-                    <Calendar size={16} />
-                  </div>
                   <Input
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={day}
-                    onChange={(e) => setDay(e.target.value)}
-                    className="h-10 border-none bg-transparent pl-10 text-sm focus-visible:ring-0"
+                    name="description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Ex: Netflix, Aluguel..."
+                    className="h-10 border-none bg-transparent px-2 text-sm placeholder:text-zinc-700 focus-visible:ring-0"
                   />
                 </div>
               </div>
 
-              {/* CATEGORIA */}
-              <div className="p-3">
+              <div className="grid grid-cols-2 divide-x divide-white/5 border-b border-white/5">
+                <div className="p-3">
+                  <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    Primeira Cobrança
+                  </Label>
+                  <div className="relative mt-1">
+                    <div className="absolute left-2 top-2.5 text-zinc-500">
+                      <CalendarClock size={16} />
+                    </div>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="h-10 cursor-pointer border-none bg-transparent pl-8 text-xs [color-scheme:dark] focus-visible:ring-0"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3">
+                  <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    Frequência
+                  </Label>
+                  <div className="relative mt-1">
+                    <div className="absolute left-2 top-2.5 z-10 text-zinc-500">
+                      <Repeat size={16} />
+                    </div>
+                    <Select value={frequency} onValueChange={setFrequency}>
+                      <SelectTrigger className="h-10 border-none bg-transparent pl-8 text-xs shadow-none focus:ring-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="border-white/10 bg-zinc-900">
+                        <SelectItem value="MONTHLY">Mensal</SelectItem>
+                        <SelectItem value="YEARLY">Anual</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-b border-white/5 p-3">
                 <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
                   Categoria
                 </Label>
                 <div className="relative mt-1">
-                  <div className="absolute left-3 top-2.5 z-10 text-zinc-500">
+                  <div className="absolute left-2 top-2.5 z-10 text-zinc-500">
                     <Tag size={16} />
                   </div>
                   <Select value={categoryId} onValueChange={setCategoryId}>
-                    <SelectTrigger className="h-10 border-none bg-transparent pl-10 text-xs shadow-none focus:ring-0">
+                    <SelectTrigger className="h-10 border-none bg-transparent pl-8 text-xs shadow-none focus:ring-0">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="border-white/10 bg-zinc-900">
@@ -263,69 +204,77 @@ export function CreateRecurringSheet({
                   </Select>
                 </div>
               </div>
-            </div>
 
-            {/* CARTEIRA */}
-            <div className="border-b border-white/5 p-3">
-              <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                Carteira / Banco
-              </Label>
-              <div className="relative mt-1">
-                <div className="absolute left-3 top-2.5 z-10 text-zinc-500">
-                  <Wallet size={16} />
+              <div className="p-3">
+                <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                  Método de Pagamento
+                </Label>
+                <div className="relative mt-1">
+                  <div className="absolute left-2 top-2.5 z-10 text-zinc-500">
+                    {paymentMethod === "CREDIT_CARD" ? (
+                      <CreditCard size={16} />
+                    ) : (
+                      <Wallet size={16} />
+                    )}
+                  </div>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger className="h-10 border-none bg-transparent pl-8 text-xs shadow-none focus:ring-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-white/10 bg-zinc-900">
+                      <SelectItem value="CREDIT_CARD">Cartão de Crédito</SelectItem>
+                      <SelectItem value="DEBIT_CARD">Débito Automático</SelectItem>
+                      <SelectItem value="PIX">Pix Recorrente</SelectItem>
+                      <SelectItem value="BOLETO">Boleto</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Select value={bankAccountId} onValueChange={setBankAccountId}>
-                  <SelectTrigger className="h-10 border-none bg-transparent pl-10 text-xs shadow-none focus:ring-0">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent className="border-white/10 bg-zinc-900">
-                    <SelectItem value="none">Nenhuma (Sem vínculo)</SelectItem>
-                    {accounts.map((acc) => (
-                      <SelectItem key={acc.id} value={acc.id}>
-                        {acc.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
-            </div>
 
-            {/* FORMA DE PAGAMENTO */}
-            <div className="p-3">
-              <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                Pagamento
-              </Label>
-              <div className="relative mt-1">
-                <div className="absolute left-3 top-2.5 z-10 text-zinc-500">
-                  <CreditCard size={16} />
+              {paymentMethod !== "CREDIT_CARD" && (
+                <div className="border-t border-white/5 p-3 duration-300 animate-in slide-in-from-top-2">
+                  <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    Debitar de
+                  </Label>
+                  <div className="relative mt-1">
+                    <div className="absolute left-2 top-2.5 z-10 text-zinc-500">
+                      <Wallet size={16} />
+                    </div>
+                    <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                      <SelectTrigger className="h-10 border-none bg-transparent pl-8 text-xs shadow-none focus:ring-0">
+                        <SelectValue placeholder="Selecione a conta" />
+                      </SelectTrigger>
+                      <SelectContent className="border-white/10 bg-zinc-900">
+                        <SelectItem value="none">Selecione...</SelectItem>
+                        {accounts.map((acc) => (
+                          <SelectItem key={acc.id} value={acc.id}>
+                            {acc.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <SelectTrigger className="h-10 border-none bg-transparent pl-10 text-xs shadow-none focus:ring-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border-white/10 bg-zinc-900">
-                    <SelectItem value="CREDIT_CARD">Cartão de Crédito</SelectItem>
-                    <SelectItem value="DEBIT_CARD">Cartão de Débito</SelectItem>
-                    <SelectItem value="PIX">Pix</SelectItem>
-                    <SelectItem value="CASH">Dinheiro</SelectItem>
-                    <SelectItem value="BOLETO">Boleto</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              )}
             </div>
           </div>
-        </div>
 
-        <SheetFooter className="absolute bottom-0 left-0 z-20 w-full border-t border-white/5 bg-zinc-950/90 p-5 backdrop-blur-xl">
-          <Button
-            onClick={handleSubmit}
-            disabled={isLoading || amount <= 0}
-            className="h-12 w-full rounded-xl bg-white text-sm font-bold text-black shadow-lg shadow-white/5 transition-transform hover:bg-zinc-200 active:scale-[0.98]"
-          >
-            {isLoading ? <Loader2 className="animate-spin" /> : <Plus size={16} className="mr-2" />}
-            Confirmar Assinatura
-          </Button>
-        </SheetFooter>
+          <SheetFooter className="absolute bottom-0 left-0 z-20 flex w-full flex-col gap-3 border-t border-white/5 bg-zinc-950/90 p-5 backdrop-blur-xl sm:flex-row">
+            <Button
+              type="submit"
+              disabled={isPending}
+              className="h-12 flex-1 rounded-xl bg-white text-sm font-bold text-black shadow-lg shadow-white/5 transition-transform hover:bg-zinc-200 active:scale-[0.98]"
+            >
+              {isPending ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <>
+                  <Plus size={16} className="mr-2" /> Criar Assinatura
+                </>
+              )}
+            </Button>
+          </SheetFooter>
+        </form>
       </SheetContent>
     </Sheet>
   )

@@ -70,11 +70,7 @@ export function TransactionList({ transactions, categories, accounts }: Transact
                         : "bg-zinc-800 text-zinc-400"
                     }`}
                   >
-                    {t.type === "INCOME" ? (
-                      <ArrowUpRight size={16} />
-                    ) : (
-                      <ArrowDownLeft size={16} />
-                    )}
+                    {t.type === "INCOME" ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
                   </div>
                   <div className="overflow-hidden">
                     <p className="max-w-[150px] truncate text-sm font-medium text-zinc-200 transition group-hover:text-white md:max-w-[250px]">

@@ -290,10 +290,7 @@ export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) 
                       cornerRadius={3}
                     >
                       {pieChartData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS.pie[index % COLORS.pie.length]}
-                        />
+                        <Cell key={`cell-${index}`} fill={COLORS.pie[index % COLORS.pie.length]} />
                       ))}
                     </Pie>
                     <Tooltip
@@ -305,9 +302,7 @@ export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) 
                         padding: "8px",
                       }}
                       itemStyle={{ color: "#fff", fontSize: "10px" }}
-                      formatter={(value: number | undefined) =>
-                        formatCurrencyFull(value ?? 0)
-                      }
+                      formatter={(value: number | undefined) => formatCurrencyFull(value ?? 0)}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -336,9 +331,7 @@ export function FinancialCharts({ data, initialBalance }: FinancialChartsProps) 
                         {entry.name}
                       </span>
                     </div>
-                    <span className="font-mono text-zinc-300">
-                      {formatCurrency(entry.value)}
-                    </span>
+                    <span className="font-mono text-zinc-300">{formatCurrency(entry.value)}</span>
                   </div>
                 ))}
               </div>

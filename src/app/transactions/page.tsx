@@ -6,12 +6,7 @@ import { Button } from "@/components/ui/button"
 
 import { getAuthenticatedUser } from "@/lib/auth-check"
 import { prisma } from "@/lib/prisma"
-import {
-  SafeAccount,
-  SafeCategory,
-  SafeTransaction,
-  toSafeTransaction,
-} from "@/lib/transformers"
+import { SafeAccount, SafeCategory, SafeTransaction, toSafeTransaction } from "@/lib/transformers"
 
 import { TransactionFilters } from "./components/transaction-filters"
 import { TransactionsTable } from "./components/transactions-table"
