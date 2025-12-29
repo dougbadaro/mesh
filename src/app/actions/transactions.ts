@@ -235,8 +235,11 @@ export async function deleteTransaction(id: string) {
       return { error: "Transação não encontrada ou não autorizada." }
     }
 
-    await prisma.transaction.delete({
+    await prisma.transaction.update({
       where: { id },
+      data: {
+        deletedAt: new Date(),
+      },
     })
 
     revalidatePath("/")

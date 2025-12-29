@@ -84,9 +84,10 @@ model RecurringTransaction {
   frequency     String          @default("MONTHLY")
   active        Boolean         @default(true)
 
-  startDate DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  startDate DateTime  @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   installments  Int?
   isFixed       Boolean @default(false)
@@ -98,10 +99,8 @@ model RecurringTransaction {
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id])
 
-  // --- ATUALIZAÇÃO AQUI ---
-  bankAccountId String? // Permite vincular a uma carteira
+  bankAccountId String?
   bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id])
-  // ------------------------
 
   transactions Transaction[]
 
@@ -118,8 +117,9 @@ model Transaction {
   date    DateTime
   dueDate DateTime @default(now())
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   currentInstallment Int?
 
@@ -149,11 +149,8 @@ model BankAccount {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  transactions Transaction[]
-
-  // --- ATUALIZAÇÃO AQUI ---
-  recurringTransactions RecurringTransaction[] // Relação inversa
-  // ------------------------
+  transactions          Transaction[]
+  recurringTransactions RecurringTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

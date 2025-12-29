@@ -51,6 +51,7 @@ export default async function TransactionsPage(props: TransactionsPageProps) {
 
   const whereCondition: Prisma.TransactionWhereInput = {
     userId: user.id,
+    deletedAt: null,
     description: {
       contains: query,
       mode: "insensitive",

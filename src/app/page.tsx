@@ -65,6 +65,7 @@ export default async function Dashboard(props: DashboardProps) {
       _sum: { amount: true },
       where: {
         userId: userId,
+        deletedAt: null,
         date: { lte: endOfMonth },
         paymentMethod: { not: "CREDIT_CARD" },
       },
@@ -72,6 +73,7 @@ export default async function Dashboard(props: DashboardProps) {
     prisma.transaction.findMany({
       where: {
         userId: userId,
+        deletedAt: null,
         date: { gte: startOfMonth, lte: endOfMonth },
       },
       orderBy: { date: "desc" },
@@ -83,6 +85,7 @@ export default async function Dashboard(props: DashboardProps) {
     prisma.transaction.findMany({
       where: {
         userId: userId,
+        deletedAt: null,
         date: { gte: startOfMonth },
         paymentMethod: "CREDIT_CARD",
       },
