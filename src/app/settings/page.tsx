@@ -1,5 +1,14 @@
-import { AlertTriangle, CreditCard, Database, Shield, Terminal, User, Wallet } from "lucide-react"
-import { ArrowLeft } from "lucide-react"
+import { TransactionType } from "@prisma/client"
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CreditCard,
+  Database,
+  Shield,
+  Terminal,
+  User,
+  Wallet,
+} from "lucide-react"
 import Link from "next/link"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -8,43 +17,131 @@ import { Separator } from "@/components/ui/separator"
 
 import { getAuthenticatedUser } from "@/lib/auth-check"
 import { prisma } from "@/lib/prisma"
-import { getUserBankAccounts } from "@/app/actions/bank-accounts"
+import { checkAndGenerateRecurringTransactions } from "@/lib/recurring-job"
+import { SafeAccount, SafeCategory } from "@/lib/transformers"
 
 import { BankAccountManager } from "./components/bank-account-manager"
 import { CategoryManager } from "./components/category-manager"
 import { CreditCardSettings } from "./components/credit-card-settings"
 import { ExportCsvCard } from "./components/export-csv-card"
+import { TrashModal } from "./components/trash-modal" // <--- Importe o novo componente
+
+interface AccountWithBalance extends SafeAccount {
+  currentBalance: number
+}
 
 export default async function SettingsPage() {
   const authUser = await getAuthenticatedUser()
 
-  // Buscar contas bancárias do usuário
-  const bankAccounts = await getUserBankAccounts()
+  await checkAndGenerateRecurringTransactions(authUser.id)
 
-  const userSettings = await prisma.user.findUnique({
-    where: { id: authUser.id },
-    select: {
-      creditCardClosingDay: true,
-      creditCardDueDay: true,
+  // =================================================================
+  // 1. DADOS ATIVOS (Para as listas principais)
+  // =================================================================
+
+  const rawBankAccounts = await prisma.bankAccount.findMany({
+    where: { userId: authUser.id, deletedAt: null },
+    orderBy: { name: "asc" },
+  })
+
+  // Cálculo de Saldo (Corrigido e Igual Dashboard)
+  const balanceAggregations = await prisma.transaction.groupBy({
+    by: ["bankAccountId", "type"],
+    _sum: { amount: true },
+    where: {
+      userId: authUser.id,
+      deletedAt: null,
+      paymentMethod: { not: "CREDIT_CARD" },
+      date: { lte: new Date() },
     },
+  })
+
+  const totalsMap: Record<string, number> = {}
+  balanceAggregations.forEach((agg) => {
+    if (agg.bankAccountId) {
+      const key = `${agg.bankAccountId}_${agg.type}`
+      totalsMap[key] = Number(agg._sum.amount || 0)
+    }
+  })
+
+  const bankAccounts: AccountWithBalance[] = rawBankAccounts.map((acc) => {
+    const totalIncome = totalsMap[`${acc.id}_${TransactionType.INCOME}`] || 0
+    const totalExpense = totalsMap[`${acc.id}_${TransactionType.EXPENSE}`] || 0
+    const initial = Number(acc.initialBalance)
+
+    return {
+      ...acc,
+      initialBalance: initial,
+      currentBalance: initial + totalIncome - totalExpense,
+    }
   })
 
   const rawCategories = await prisma.category.findMany({
-    where: {
-      OR: [{ userId: authUser.id }, { userId: null }],
-    },
+    where: { OR: [{ userId: authUser.id }, { userId: null }], deletedAt: null },
     orderBy: { name: "asc" },
   })
-  const categories = rawCategories.map((cat) => ({
-    ...cat,
+
+  const categories: SafeCategory[] = rawCategories.map((cat) => ({
+    id: cat.id,
+    name: cat.name,
+    type: cat.type,
+    userId: cat.userId,
     budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null,
+    createdAt: cat.createdAt.toISOString(),
+    updatedAt: cat.updatedAt.toISOString(),
   }))
+
+  const userSettings = await prisma.user.findUnique({
+    where: { id: authUser.id },
+    select: { creditCardClosingDay: true, creditCardDueDay: true },
+  })
+
+  // =================================================================
+  // 2. DADOS DELETADOS (Para a Lixeira)
+  // =================================================================
+
+  const deletedTransactionsRaw = await prisma.transaction.findMany({
+    where: { userId: authUser.id, deletedAt: { not: null } },
+    orderBy: { deletedAt: "desc" },
+    take: 50, // Limite de segurança
+  })
+
+  const deletedCategoriesRaw = await prisma.category.findMany({
+    where: { userId: authUser.id, deletedAt: { not: null } },
+    orderBy: { deletedAt: "desc" },
+  })
+
+  const deletedAccountsRaw = await prisma.bankAccount.findMany({
+    where: { userId: authUser.id, deletedAt: { not: null } },
+    orderBy: { deletedAt: "desc" },
+  })
+
+  // Formatando dados para a lixeira
+  const trashData = {
+    transactions: deletedTransactionsRaw.map((t) => ({
+      id: t.id,
+      description: t.description,
+      amount: Number(t.amount),
+      type: t.type,
+      deletedAt: t.deletedAt!.toISOString(),
+    })),
+    categories: deletedCategoriesRaw.map((c) => ({
+      id: c.id,
+      name: c.name,
+      type: c.type,
+      deletedAt: c.deletedAt!.toISOString(),
+    })),
+    bankAccounts: deletedAccountsRaw.map((b) => ({
+      id: b.id,
+      name: b.name,
+      deletedAt: b.deletedAt!.toISOString(),
+    })),
+  }
 
   const isVerified = !!authUser.emailVerified
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 p-4 pb-24 duration-700 animate-in fade-in md:p-6">
-      {/* HEADER COMPACTO */}
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
@@ -65,7 +162,6 @@ export default async function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-        {/* COLUNA ESQUERDA (PERFIL) - Sticky */}
         <div className="space-y-6 md:col-span-4">
           <div className="sticky top-6 flex flex-col items-center rounded-3xl border border-white/5 bg-zinc-900/40 p-6 text-center backdrop-blur-xl">
             <Avatar className="mb-3 h-20 w-20 border-2 border-zinc-800 shadow-xl">
@@ -94,9 +190,7 @@ export default async function SettingsPage() {
           </div>
         </div>
 
-        {/* COLUNA DIREITA (CONFIGURAÇÕES) */}
         <div className="space-y-8 md:col-span-8">
-          {/* SEÇÃO 1: CARTEIRAS */}
           <section className="space-y-3">
             <div className="flex items-center gap-2 px-1">
               <Wallet size={14} className="text-emerald-500" />
@@ -109,7 +203,6 @@ export default async function SettingsPage() {
 
           <Separator className="bg-white/5" />
 
-          {/* SEÇÃO 2: CARTÃO */}
           <section className="space-y-3">
             <div className="flex items-center gap-2 px-1">
               <CreditCard size={14} className="text-emerald-500" />
@@ -125,7 +218,6 @@ export default async function SettingsPage() {
 
           <Separator className="bg-white/5" />
 
-          {/* SEÇÃO 3: CATEGORIAS */}
           <section className="space-y-3">
             <div className="flex items-center gap-2 px-1">
               <Terminal size={14} className="text-emerald-500" />
@@ -138,18 +230,26 @@ export default async function SettingsPage() {
 
           <Separator className="bg-white/5" />
 
-          {/* SEÇÃO 4: DADOS */}
           <section className="space-y-3">
             <div className="flex items-center gap-2 px-1">
               <Database size={14} className="text-emerald-500" />
               <h3 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                Dados
+                Gestão de Dados
               </h3>
             </div>
-            <ExportCsvCard />
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ExportCsvCard />
+
+              {/* AQUI ESTÁ O NOVO COMPONENTE DE MODAL */}
+              <TrashModal 
+                transactions={trashData.transactions}
+                categories={trashData.categories}
+                bankAccounts={trashData.bankAccounts}
+              />
+            </div>
           </section>
 
-          {/* FOOTER */}
           <div className="flex flex-col items-center justify-center gap-2 pb-2 pt-8 text-zinc-700 opacity-40 transition-opacity hover:opacity-100">
             <p className="font-mono text-[9px] uppercase tracking-widest">Mesh System v1.2</p>
           </div>

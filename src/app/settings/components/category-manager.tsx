@@ -1,7 +1,9 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useMemo, useState } from "react"
+import { TransactionType } from "@prisma/client"
 import { ArrowDownCircle, ArrowUpCircle, Loader2, Lock, Plus, Tag, Trash2 } from "lucide-react"
+import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,32 +18,24 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+import { SafeCategory } from "@/lib/transformers"
 import { createCategory, deleteCategory } from "@/app/actions/categories"
 
-interface CategoryDTO {
-  id: string
-  name: string
-  type: string
-  budgetLimit: number | null
-  userId: string | null
-  createdAt: Date
-  updatedAt: Date
-}
-
 interface CategoryManagerProps {
-  categories: CategoryDTO[]
+  categories: SafeCategory[]
   currentUserId: string
 }
 
-// --- SUB-COMPONENTE DE LISTAGEM ---
 const CategoryList = ({
   items,
   onDelete,
   isPending,
+  currentUserId,
 }: {
-  items: CategoryDTO[]
+  items: SafeCategory[]
   onDelete: (id: string) => void
   isPending: boolean
+  currentUserId: string
 }) => (
   <div className="custom-scrollbar mt-4 max-h-[300px] space-y-1.5 overflow-y-auto pr-1">
     {items.length === 0 && (
@@ -63,7 +57,11 @@ const CategoryList = ({
                 : "bg-rose-500/10 text-rose-500"
             }`}
           >
-            {cat.type === "INCOME" ? <ArrowUpCircle size={14} /> : <ArrowDownCircle size={14} />}
+            {cat.type === "INCOME" ? (
+              <ArrowUpCircle size={14} />
+            ) : (
+              <ArrowDownCircle size={14} />
+            )}
           </div>
           <div className="flex flex-col">
             <span className="text-xs font-medium text-zinc-200">{cat.name}</span>
@@ -76,7 +74,7 @@ const CategoryList = ({
         </div>
 
         <div className="flex items-center">
-          {cat.userId === null ? (
+          {cat.userId === null || cat.userId !== currentUserId ? (
             <Lock size={12} className="mr-2 text-zinc-700" />
           ) : (
             <Button
@@ -95,11 +93,11 @@ const CategoryList = ({
   </div>
 )
 
-export function CategoryManager({ categories }: CategoryManagerProps) {
-  const [isPending, startTransition] = useTransition()
+export function CategoryManager({ categories, currentUserId }: CategoryManagerProps) {
+  const [isPending, setIsPending] = useState(false)
 
   const [newName, setNewName] = useState("")
-  const [newType, setNewType] = useState<string>("EXPENSE")
+  const [newType, setNewType] = useState<TransactionType>("EXPENSE")
 
   const { expenses, incomes } = useMemo(
     () => ({
@@ -109,39 +107,66 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
     [categories]
   )
 
-  const handleCreate = () => {
-    if (!newName) return
-    startTransition(async () => {
-      const formData = new FormData()
-      formData.append("name", newName)
-      formData.append("type", newType)
-      await createCategory(formData)
-      setNewName("")
-    })
+  const handleCreate = async () => {
+    if (!newName.trim()) return
+
+    setIsPending(true)
+    const formData = new FormData()
+    formData.append("name", newName)
+    formData.append("type", newType)
+
+    try {
+      const result = await createCategory(formData)
+      if (result?.error) {
+        toast.error(result.error)
+      } else {
+        toast.success("Categoria criada")
+        setNewName("")
+      }
+    } catch {
+      toast.error("Erro ao criar categoria")
+    } finally {
+      setIsPending(false)
+    }
   }
 
-  const handleDelete = (id: string) => {
-    if (!confirm("Atenção: Transações vinculadas a esta categoria serão movidas para 'Geral'."))
-      return
-    startTransition(async () => {
+  const handleDelete = async (id: string) => {
+    const confirm = window.confirm(
+      "Atenção: Transações vinculadas a esta categoria serão movidas para 'Geral'."
+    )
+    if (!confirm) return
+
+    setIsPending(true)
+    try {
       await deleteCategory(id)
-    })
+      toast.success("Categoria removida")
+    } catch {
+      toast.error("Erro ao remover")
+    } finally {
+      setIsPending(false)
+    }
   }
 
   return (
     <Card className="overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-sm backdrop-blur-xl">
       <CardContent className="p-5">
-        {/* Input Compacto */}
         <div className="mb-6 flex gap-2 rounded-xl border border-white/5 bg-zinc-950/50 p-1">
           <Input
             placeholder="Nova categoria..."
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             className="h-9 flex-1 border-none bg-transparent text-sm placeholder:text-zinc-600 focus-visible:ring-0"
+            disabled={isPending}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCreate()
+            }}
           />
 
           <div className="flex gap-2">
-            <Select value={newType} onValueChange={setNewType}>
+            <Select
+              value={newType}
+              onValueChange={(val) => setNewType(val as TransactionType)}
+            >
               <SelectTrigger className="h-9 w-[110px] rounded-lg border-white/10 bg-zinc-900 text-[10px] font-bold uppercase tracking-wide focus:ring-0">
                 <SelectValue />
               </SelectTrigger>
@@ -190,10 +215,20 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
           </TabsList>
 
           <TabsContent value="expenses" className="mt-0">
-            <CategoryList items={expenses} onDelete={handleDelete} isPending={isPending} />
+            <CategoryList
+              items={expenses}
+              onDelete={handleDelete}
+              isPending={isPending}
+              currentUserId={currentUserId}
+            />
           </TabsContent>
           <TabsContent value="incomes" className="mt-0">
-            <CategoryList items={incomes} onDelete={handleDelete} isPending={isPending} />
+            <CategoryList
+              items={incomes}
+              onDelete={handleDelete}
+              isPending={isPending}
+              currentUserId={currentUserId}
+            />
           </TabsContent>
         </Tabs>
       </CardContent>

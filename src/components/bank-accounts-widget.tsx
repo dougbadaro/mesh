@@ -31,7 +31,7 @@ export function BankAccountsWidget({ accounts }: BankAccountsWidgetProps) {
     }
   }
 
-  // Opcional: Calcular total visível para mostrar no header ou resumo
+  // Calcula o total para mostrar no header
   const totalBalance = accounts.reduce((acc, curr) => acc + curr.currentBalance, 0)
 
   return (
@@ -83,7 +83,9 @@ export function BankAccountsWidget({ accounts }: BankAccountsWidgetProps) {
               </div>
 
               <span
-                className={`font-mono text-sm font-bold tracking-tight ${acc.currentBalance < 0 ? "text-rose-400" : "text-zinc-200"}`}
+                className={`font-mono text-sm font-bold tracking-tight ${
+                  acc.currentBalance < 0 ? "text-rose-400" : "text-zinc-200"
+                }`}
               >
                 {formatCurrency(acc.currentBalance)}
               </span>

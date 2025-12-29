@@ -12,6 +12,8 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -34,6 +36,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 
+import { SafeAccount } from "@/lib/transformers"
 import { cn } from "@/lib/utils"
 import {
   createBankAccount,
@@ -41,12 +44,17 @@ import {
   updateBankAccount,
 } from "@/app/actions/bank-accounts"
 
-// --- MONEY INPUT ---
+// Estende o SafeAccount para incluir o saldo calculado
+interface AccountWithBalance extends SafeAccount {
+  currentBalance: number
+}
+
 interface MoneyInputProps {
   value: number
   onChange: (value: number) => void
   disabled?: boolean
 }
+
 function MoneyInput({ value, onChange, disabled }: MoneyInputProps) {
   const [displayValue, setDisplayValue] = useState(() => {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
@@ -71,20 +79,8 @@ function MoneyInput({ value, onChange, disabled }: MoneyInputProps) {
   )
 }
 
-// --- TIPOS ---
-type BankAccount = {
-  id: string
-  name: string
-  type: string
-  initialBalance: number
-  currentBalance?: number
-  transactionCount?: number
-  color: string | null
-  includeInTotal: boolean
-}
-
 interface BankAccountManagerProps {
-  initialAccounts: BankAccount[]
+  initialAccounts: AccountWithBalance[]
 }
 
 const COLORS = [
@@ -98,14 +94,16 @@ const COLORS = [
 ]
 
 export function BankAccountManager({ initialAccounts }: BankAccountManagerProps) {
-  const [accounts, setAccounts] = useState(initialAccounts)
+  const router = useRouter()
+  // Usa o tipo estendido
+  const [accounts, setAccounts] = useState<AccountWithBalance[]>(initialAccounts)
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [accountToDelete, setAccountToDelete] = useState<BankAccount | null>(null)
+  const [accountToDelete, setAccountToDelete] = useState<AccountWithBalance | null>(null)
 
   const [newName, setNewName] = useState("")
   const [newBalance, setNewBalance] = useState(0)
@@ -126,10 +124,11 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
     setIsFormOpen(true)
   }
 
-  const openEditModal = (acc: BankAccount) => {
+  const openEditModal = (acc: AccountWithBalance) => {
     setEditingId(acc.id)
     setNewName(acc.name)
-    setNewBalance(acc.currentBalance ?? acc.initialBalance)
+    // IMPORTANTE: Ao editar, usamos o initialBalance (o valor base), não o calculado
+    setNewBalance(acc.initialBalance)
     setNewType(acc.type)
     setNewColor(acc.color || COLORS[2].value)
     setIncludeInTotal(acc.includeInTotal)
@@ -150,25 +149,30 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
 
     let result
 
-    if (editingId) {
-      formData.append("balance", newBalance.toString())
-      result = await updateBankAccount(editingId, formData)
-    } else {
-      formData.append("initialBalance", newBalance.toString())
-      result = await createBankAccount(formData)
-    }
+    try {
+      if (editingId) {
+        formData.append("balance", newBalance.toString())
+        result = await updateBankAccount(editingId, formData)
+      } else {
+        formData.append("initialBalance", newBalance.toString())
+        result = await createBankAccount(formData)
+      }
 
-    setIsLoading(false)
-
-    if (result.success) {
-      setIsFormOpen(false)
-      window.location.reload()
-    } else {
-      alert("Erro ao salvar carteira.")
+      if (result.success) {
+        toast.success(editingId ? "Carteira atualizada" : "Carteira criada")
+        setIsFormOpen(false)
+        router.refresh()
+      } else {
+        toast.error(result.error || "Erro ao salvar carteira.")
+      }
+    } catch {
+      toast.error("Erro inesperado.")
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const openDeleteModal = (acc: BankAccount) => {
+  const openDeleteModal = (acc: AccountWithBalance) => {
     setAccountToDelete(acc)
     setDeleteTransactions(false)
     setIsDeleteOpen(true)
@@ -178,15 +182,22 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
     if (!accountToDelete) return
     setIsLoading(true)
 
-    const result = await deleteBankAccount(accountToDelete.id, deleteTransactions)
+    try {
+      const result = await deleteBankAccount(accountToDelete.id)
 
-    setIsLoading(false)
-    if (result.success) {
-      setAccounts((prev) => prev.filter((acc) => acc.id !== accountToDelete.id))
-      setIsDeleteOpen(false)
-      setAccountToDelete(null)
-    } else {
-      alert("Erro ao deletar carteira.")
+      if (result.success) {
+        setAccounts((prev) => prev.filter((acc) => acc.id !== accountToDelete.id))
+        toast.success("Carteira movida para lixeira")
+        setIsDeleteOpen(false)
+        setAccountToDelete(null)
+        router.refresh()
+      } else {
+        toast.error(result.error || "Erro ao deletar carteira.")
+      }
+    } catch {
+      toast.error("Erro inesperado.")
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -238,9 +249,13 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
                   <span className="rounded border border-white/5 bg-white/5 px-1.5 text-[10px] text-zinc-500">
                     {getTypeLabel(acc.type)}
                   </span>
-                  {acc.transactionCount ? (
-                    <span className="text-[9px] text-zinc-600">{acc.transactionCount} mov.</span>
-                  ) : null}
+                  {/* AQUI ESTAVA O ERRO: Agora mostramos acc.currentBalance */}
+                  <span className="text-[9px] font-medium text-zinc-400">
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(acc.currentBalance)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -266,7 +281,6 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
           </div>
         ))}
 
-        {/* BOTÃO NOVA CARTEIRA */}
         <button
           onClick={openCreateModal}
           className="flex min-h-[70px] w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-800 bg-zinc-900/20 p-3 text-zinc-500 transition-all hover:border-emerald-500/30 hover:bg-zinc-900/40 hover:text-emerald-500"
@@ -275,7 +289,6 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
           <span className="text-[10px] font-bold uppercase tracking-wider">Adicionar</span>
         </button>
 
-        {/* --- MODAL DE FORMULÁRIO --- */}
         <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
           <DialogContent className="rounded-3xl border-white/10 bg-zinc-950 text-zinc-100 sm:max-w-sm">
             <DialogHeader>
@@ -320,7 +333,8 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
                 </div>
                 <div className="grid gap-1.5">
                   <Label className="pl-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                    {editingId ? "Saldo Atual" : "Saldo Inicial"}
+                    {/* Mantém a lógica de edição do saldo inicial */}
+                    {editingId ? "Saldo Inicial (Base)" : "Saldo Inicial"}
                   </Label>
                   <MoneyInput value={newBalance} onChange={setNewBalance} />
                 </div>
@@ -393,7 +407,6 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
           </DialogContent>
         </Dialog>
 
-        {/* --- MODAL DE EXCLUSÃO --- */}
         <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
           <DialogContent className="rounded-3xl border-white/10 bg-zinc-950 text-zinc-100 sm:max-w-xs">
             <DialogHeader>
@@ -409,8 +422,7 @@ export function BankAccountManager({ initialAccounts }: BankAccountManagerProps)
             <div className="space-y-3 py-2">
               <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-3">
                 <p className="text-[10px] text-rose-300">
-                  Esta carteira possui{" "}
-                  <strong>{accountToDelete?.transactionCount || 0} movimentações</strong>.
+                  Esta carteira será movida para a <strong>Lixeira</strong>.
                 </p>
               </div>
 

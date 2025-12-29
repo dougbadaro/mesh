@@ -8,58 +8,59 @@ import { getAuthenticatedUser } from "@/lib/auth-check"
 import { prisma } from "@/lib/prisma"
 
 const createCategorySchema = z.object({
-  name: z.string().min(2, "Nome muito curto"),
+  name: z.string().min(2),
   type: z.nativeEnum(TransactionType),
 })
 
 export async function createCategory(formData: FormData) {
-  const user = await getAuthenticatedUser()
+  try {
+    const user = await getAuthenticatedUser()
 
-  const rawData = {
-    name: formData.get("name"),
-    type: formData.get("type"),
+    const rawData = {
+      name: formData.get("name"),
+      type: formData.get("type"),
+    }
+
+    const result = createCategorySchema.safeParse(rawData)
+
+    if (!result.success) {
+      return { error: "Dados inválidos" }
+    }
+
+    await prisma.category.create({
+      data: {
+        name: result.data.name,
+        type: result.data.type,
+        userId: user.id,
+      },
+    })
+
+    revalidatePath("/settings")
+    revalidatePath("/")
+    return { success: true }
+  } catch {
+    return { error: "Erro ao criar categoria" }
   }
-
-  const result = createCategorySchema.safeParse(rawData)
-
-  if (!result.success) {
-    throw new Error("Dados inválidos")
-  }
-
-  await prisma.category.create({
-    data: {
-      name: result.data.name,
-      type: result.data.type,
-      userId: user.id,
-    },
-  })
-
-  revalidatePath("/settings")
-  revalidatePath("/transactions") // Atualiza dropdowns
 }
 
 export async function deleteCategory(categoryId: string) {
-  const user = await getAuthenticatedUser()
-
-  // Verifica se a categoria pertence ao usuário antes de deletar
-  const category = await prisma.category.findUnique({
-    where: { id: categoryId },
-  })
-
-  if (!category || category.userId !== user.id) {
-    throw new Error("Você não tem permissão para deletar esta categoria.")
-  }
-
-  // Deleta a categoria (Transações ficam com categoryId = null se tiver SetNull no schema, ou deleta se tiver Cascade)
-  // O ideal é que transações não sejam apagadas, apenas percam a categoria.
   try {
-    await prisma.category.delete({
-      where: { id: categoryId },
-    })
-  } catch (error) {
-    throw new Error("Erro ao deletar. Verifique se existem transações vinculadas.")
-  }
+    const user = await getAuthenticatedUser()
 
-  revalidatePath("/settings")
-  revalidatePath("/transactions")
+    await prisma.category.update({
+      where: {
+        id: categoryId,
+        userId: user.id,
+      },
+      data: {
+        deletedAt: new Date(),
+      },
+    })
+
+    revalidatePath("/settings")
+    revalidatePath("/")
+    return { success: true }
+  } catch (error) {
+    return { error: "Erro ao remover categoria" }
+  }
 }

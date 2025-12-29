@@ -69,6 +69,7 @@ model Category {
   userId      String?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
 
   user                  User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   recurringTransactions RecurringTransaction[]
@@ -152,8 +153,9 @@ model BankAccount {
   transactions          Transaction[]
   recurringTransactions RecurringTransaction[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@map("bank_accounts")
 }
@@ -170,4 +172,5 @@ enum PaymentMethod {
   CASH
   BANK_TRANSFER
   OTHER
+  BOLETO
 }
