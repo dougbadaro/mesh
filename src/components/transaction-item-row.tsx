@@ -4,41 +4,13 @@ import { ShoppingBag } from "lucide-react"
 
 import { EditTransactionSheet } from "@/components/edit-transaction-sheet"
 
+import { SafeAccount, SafeCategory, SafeTransaction } from "@/lib/transformers"
 import { cn } from "@/lib/utils"
 
-// --- CORREÇÃO AQUI ---
-// Expandimos a interface para incluir os campos que o EditTransactionSheet exige
-interface Category {
-  id: string
-  name: string
-  budgetLimit: number | null
-  type: string // Adicionado
-  userId: string | null // Adicionado
-  createdAt: Date // Adicionado
-  updatedAt: Date // Adicionado
-}
-
-interface Account {
-  id: string
-  name: string
-}
-
-// A interface da transação já deve vir sanitizada (sem Decimal)
-interface TransactionRowProps {
-  transaction: {
-    id: string
-    description: string
-    amount: number
-    date: Date
-    dueDate: Date
-    type: string
-    paymentMethod: string
-    categoryId?: string | null
-    bankAccountId?: string | null
-    category: { name: string } | null
-  }
-  categories: Category[]
-  accounts: Account[]
+interface TransactionItemRowProps {
+  transaction: SafeTransaction
+  categories: SafeCategory[]
+  accounts: SafeAccount[]
   isLast: boolean
 }
 
@@ -47,19 +19,17 @@ export function TransactionItemRow({
   categories,
   accounts,
   isLast,
-}: TransactionRowProps) {
-  // Formatadores
+}: TransactionItemRowProps) {
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
 
-  const formatDate = (date: Date | string) => {
+  const formatDate = (date: string | Date) => {
     const d = new Date(date)
     return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(d)
   }
 
   return (
     <EditTransactionSheet transaction={transaction} categories={categories} accounts={accounts}>
-      {/* IMPORTANTE: Mantemos a div limpa para o Trigger funcionar */}
       <div
         className={cn(
           "group flex w-full cursor-pointer items-center justify-between bg-transparent p-4 transition-colors hover:bg-white/[0.02]",

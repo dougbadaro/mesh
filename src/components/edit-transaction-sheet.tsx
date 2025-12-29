@@ -34,42 +34,15 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
+import { SafeAccount, SafeCategory, SafeTransaction } from "@/lib/transformers"
 import { cn } from "@/lib/utils"
 import { deleteTransaction, updateTransaction } from "@/app/actions/transactions"
 
-interface CategoryDTO {
-  id: string
-  name: string
-  type: string
-  budgetLimit: number | null
-  userId: string | null
-  createdAt: Date
-  updatedAt: Date
-}
-
-interface AccountDTO {
-  id: string
-  name: string
-}
-
-interface TransactionProps {
-  id: string
-  description: string
-  amount: number
-  date: Date
-  type: string
-  paymentMethod: string
-  categoryId?: string | null
-  bankAccountId?: string | null
-  dueDate?: Date | null
-  category?: { name: string } | null
-}
-
 interface EditSheetProps {
   children: React.ReactNode
-  transaction: TransactionProps
-  categories: CategoryDTO[]
-  accounts: AccountDTO[]
+  transaction: SafeTransaction
+  categories: SafeCategory[]
+  accounts: SafeAccount[]
 }
 
 export function EditTransactionSheet({
@@ -92,6 +65,7 @@ export function EditTransactionSheet({
   const [description, setDescription] = useState(transaction.description)
   const [date, setDate] = useState(() => {
     try {
+      // Garante que funciona se vier como string (SafeTransaction) ou Date
       return new Date(transaction.date).toISOString().split("T")[0]
     } catch {
       return new Date().toISOString().split("T")[0]
@@ -176,7 +150,7 @@ export function EditTransactionSheet({
     // Executa a exclusão em background
     const response = await deleteTransaction(transaction.id)
 
-    // Se der erro, avisa o usuário (o rollback visual seria feito aqui se usássemos useOptimistic na lista pai)
+    // Se der erro, avisa o usuário
     if (response?.error) {
       toast.error(response.error)
     }

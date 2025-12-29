@@ -18,6 +18,12 @@ import { Card, CardContent } from "@/components/ui/card"
 
 import { getAuthenticatedUser } from "@/lib/auth-check"
 import { prisma } from "@/lib/prisma"
+import {
+  SafeAccount,
+  SafeCategory,
+  SafeTransaction,
+  toSafeTransaction,
+} from "@/lib/transformers"
 import { cn } from "@/lib/utils"
 
 interface CreditCardPageProps {
@@ -31,7 +37,6 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
   const user = await getAuthenticatedUser()
   const searchParams = await props.searchParams
 
-  // 1. Configurações
   const userSettings = await prisma.user.findUnique({
     where: { id: user.id },
     select: { creditCardClosingDay: true, creditCardDueDay: true },
@@ -40,7 +45,6 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
   const closingDay = userSettings?.creditCardClosingDay || 1
   const dueDay = userSettings?.creditCardDueDay || 10
 
-  // 2. Data
   const now = new Date()
   let selectedMonth = searchParams.month ? parseInt(searchParams.month) : now.getMonth()
   let selectedYear = searchParams.year ? parseInt(searchParams.year) : now.getFullYear()
@@ -55,7 +59,6 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
 
   const invoiceDate = new Date(selectedYear, selectedMonth, 1)
 
-  // 3. Buscar Dados
   const startOfInvoice = new Date(selectedYear, selectedMonth, 1)
   const endOfInvoice = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59)
 
@@ -63,30 +66,41 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
     prisma.transaction.findMany({
       where: {
         userId: user.id,
+        deletedAt: null,
         paymentMethod: "CREDIT_CARD",
         dueDate: {
           gte: startOfInvoice,
           lte: endOfInvoice,
         },
       },
-      include: { category: true },
+      include: {
+        category: true,
+        bankAccount: true,
+      },
       orderBy: { date: "desc" },
     }),
     prisma.category.findMany({ where: { OR: [{ userId: user.id }, { userId: null }] } }),
     prisma.bankAccount.findMany({
       where: { userId: user.id },
-      select: { id: true, name: true, initialBalance: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        color: true,
+        initialBalance: true,
+        includeInTotal: true,
+      },
     }),
     prisma.transaction.findMany({
       where: {
         userId: user.id,
+        deletedAt: null,
         paymentMethod: { not: "CREDIT_CARD" },
       },
       select: { bankAccountId: true, amount: true, type: true },
     }),
   ])
 
-  // --- CÁLCULO DE SALDOS ---
   const accountsWithBalance = rawAccounts.map((acc) => {
     const accHistory = historyTransactions.filter((t) => t.bankAccountId === acc.id)
     const totalTransacted = accHistory.reduce((sum, t) => {
@@ -101,25 +115,23 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
     }
   })
 
-  // --- SANITIZAÇÃO ---
-  const categories = rawCategories.map((cat) => ({
-    ...cat,
+  const categories: SafeCategory[] = rawCategories.map((cat) => ({
+    id: cat.id,
+    name: cat.name,
+    type: cat.type,
+    userId: cat.userId,
     budgetLimit: cat.budgetLimit ? Number(cat.budgetLimit) : null,
+    createdAt: cat.createdAt.toISOString(),
+    updatedAt: cat.updatedAt.toISOString(),
   }))
 
-  const transactions = rawTransactions.map((t) => ({
-    ...t,
-    amount: Number(t.amount),
-    category: t.category
-      ? {
-          ...t.category,
-          name: t.category.name,
-          budgetLimit: t.category.budgetLimit ? Number(t.category.budgetLimit) : null,
-        }
-      : null,
+  const safeAccounts: SafeAccount[] = accountsWithBalance.map((acc) => ({
+    ...acc,
+    initialBalance: Number(acc.initialBalance),
   }))
 
-  // 4. Cálculos da Fatura
+  const transactions: SafeTransaction[] = rawTransactions.map(toSafeTransaction)
+
   const invoiceTotal = transactions.reduce((acc, t) => acc + t.amount, 0)
   const isPast =
     new Date(selectedYear, selectedMonth, dueDay) <
@@ -133,7 +145,6 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
 
   const monthLabel = invoiceDate.toLocaleString("pt-BR", { month: "long", year: "numeric" })
 
-  // Status Visual
   let statusColor = "text-zinc-400"
   let statusBg = "bg-zinc-500/10"
   let statusText = "Futura"
@@ -153,7 +164,6 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 pb-24 duration-700 animate-in fade-in md:p-6">
-      {/* HEADER E NAVEGAÇÃO */}
       <div className="flex flex-col gap-6">
         <div className="flex items-center gap-3">
           <Button
@@ -174,7 +184,6 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
           </div>
         </div>
 
-        {/* CONTROLES DE MÊS */}
         <div className="flex items-center justify-between rounded-2xl border border-white/5 bg-zinc-900/40 p-2 backdrop-blur-xl">
           <Button
             variant="ghost"
@@ -209,7 +218,6 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
         </div>
       </div>
 
-      {/* CARD DE RESUMO */}
       <Card className="relative overflow-hidden rounded-3xl border-white/5 bg-zinc-900/40 shadow-sm backdrop-blur-xl">
         <div
           className={`absolute left-0 top-0 h-full w-1 ${isPast ? "bg-rose-500" : "bg-blue-500"}`}
@@ -242,21 +250,17 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
               </div>
               <div className="hidden h-10 w-px bg-white/10 md:block" />
 
-              {/* --- CORREÇÃO AQUI --- */}
-              {/* O 'key' força o componente a resetar quando o mês muda */}
               <PayInvoiceDialog
                 key={monthLabel}
                 invoiceTotal={invoiceTotal}
                 monthName={monthLabel}
                 accounts={accountsWithBalance}
               />
-              {/* --------------------- */}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* LISTA DE COMPRAS */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-2">
           <h3 className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
@@ -278,7 +282,7 @@ export default async function CreditCardPage(props: CreditCardPageProps) {
                 key={t.id}
                 transaction={t}
                 categories={categories}
-                accounts={accountsWithBalance}
+                accounts={safeAccounts}
                 isLast={index === transactions.length - 1}
               />
             ))}
