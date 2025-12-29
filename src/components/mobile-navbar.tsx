@@ -8,6 +8,7 @@ import {
   LogOut,
   Repeat,
   Settings,
+  Sparkles,
   Wallet,
 } from "lucide-react"
 import Link from "next/link"
@@ -71,6 +72,12 @@ export function MobileNavbar({ user }: MobileNavbarProps) {
       label: "Orçamento",
       icon: Wallet,
       active: pathname === "/budget",
+    },
+    {
+      href: "/analysis",
+      label: "Análise",
+      icon: Sparkles,
+      active: pathname === "/analysis",
     },
     {
       href: "/settings",

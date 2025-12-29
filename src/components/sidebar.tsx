@@ -7,6 +7,7 @@ import {
   LogOut,
   Repeat,
   Settings,
+  Sparkles,
   User,
   Wallet,
 } from "lucide-react"
@@ -39,8 +40,9 @@ export function Sidebar({ user, className, onLinkClick }: SidebarProps) {
     { href: "/credit-card", label: "Cartão", icon: CreditCard },
     { href: "/recurring", label: "Gastos Fixos", icon: Repeat },
     { href: "/budget", label: "Orçamento", icon: Wallet },
+    { href: "/analysis", label: "Análise IA", icon: Sparkles },
     { href: "/settings", label: "Configurações", icon: Settings },
-  ]
+  ] 
 
   // Ajustado para w-[260px] para combinar com o layout
   return (
