@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { categories, maxInstallments, validInstallments, type Transaction, type TransactionDraft, type TransactionInput } from '../main/transactions';
+import { categories, maxInstallments, validInstallments, type PaymentMethod, type Transaction, type TransactionDraft, type TransactionInput } from '../main/transactions';
 import { Choice, DatePicker } from './controls';
 import { parseReais } from './format';
+import { paymentOptions } from './payment';
 
 const types = [{ value: 'expense', label: 'Despesa' }, { value: 'income', label: 'Receita' }];
 const categoryOptions = categories.map((category) => ({ value: category, label: category }));
@@ -46,6 +47,7 @@ export function TransactionForm({ entry, month, onSave, onClose }: {
   const [busy, setBusy] = useState(false);
   const [type, setType] = useState<TransactionInput['type']>(entry?.type ?? 'expense');
   const [category, setCategory] = useState<TransactionInput['category'] | ''>(entry?.category ?? '');
+  const [payment, setPayment] = useState<PaymentMethod | ''>(entry?.paymentMethod ?? '');
   const [date, setDate] = useState(() => {
     const currentDate = today();
     return entry?.date ?? (currentDate.startsWith(month) ? currentDate : month + '-01');
@@ -77,7 +79,7 @@ export function TransactionForm({ entry, month, onSave, onClose }: {
     try {
       await onSave({
         description, date, cents,
-        type, category, installments,
+        type, category, installments, paymentMethod: payment || null,
       }, entry?.id);
     } catch {
       setError('Não foi possível salvar. Tente novamente.');
@@ -105,6 +107,10 @@ export function TransactionForm({ entry, month, onSave, onClose }: {
           </div>
           <div className="field"><span>{isParcelled ? 'Data da parcela atual' : 'Data'}</span>
             <DatePicker label={isParcelled ? 'Data da parcela atual' : 'Data'} value={date} onChange={setDate} />
+          </div>
+          <div className="field full"><span>Forma de pagamento</span>
+            <Choice label="Forma de pagamento" value={payment} options={paymentOptions}
+              onChange={(value) => setPayment(value as PaymentMethod | '')} />
           </div>
           {canParcel && (
             <label className="full installment-toggle">

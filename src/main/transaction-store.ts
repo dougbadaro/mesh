@@ -13,19 +13,32 @@ function installmentDate(date: string, offset: number) {
 
 export function openTransactionStore(filename: string) {
   const db = new DatabaseSync(filename);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS transactions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      description TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('expense', 'income')),
-      category TEXT NOT NULL,
-      date TEXT NOT NULL,
-      cents INTEGER NOT NULL CHECK(cents BETWEEN 1 AND 999999999999)
-    ) STRICT
-  `);
+  try {
+    db.exec(`
+      PRAGMA busy_timeout = 5000;
+      BEGIN IMMEDIATE;
+      CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        description TEXT NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('expense', 'income')),
+        category TEXT NOT NULL,
+        date TEXT NOT NULL,
+        cents INTEGER NOT NULL CHECK(cents BETWEEN 1 AND 999999999999),
+        paymentMethod TEXT
+      ) STRICT
+    `);
+    const columns = db.prepare('PRAGMA table_info(transactions)').all();
+    if (!columns.some((column) => column.name === 'paymentMethod')) {
+      db.exec('ALTER TABLE transactions ADD COLUMN paymentMethod TEXT');
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.close();
+    throw error;
+  }
   const list = db.prepare('SELECT * FROM transactions ORDER BY date DESC, id DESC');
-  const insert = db.prepare('INSERT INTO transactions (description, type, category, date, cents) VALUES (?, ?, ?, ?, ?) RETURNING *');
-  const update = db.prepare('UPDATE transactions SET description = ?, type = ?, category = ?, date = ?, cents = ? WHERE id = ? RETURNING *');
+  const insert = db.prepare('INSERT INTO transactions (description, type, category, date, cents, paymentMethod) VALUES (?, ?, ?, ?, ?, ?) RETURNING *');
+  const update = db.prepare('UPDATE transactions SET description = ?, type = ?, category = ?, date = ?, cents = ?, paymentMethod = ? WHERE id = ? RETURNING *');
   const remove = db.prepare('DELETE FROM transactions WHERE id = ?');
 
   function validId(id: number) {
@@ -33,8 +46,8 @@ export function openTransactionStore(filename: string) {
     return id;
   }
 
-  function insertTransaction({ description, type, category, date, cents }: TransactionInput) {
-    return insert.get(description, type, category, date, cents) as Transaction;
+  function insertTransaction({ description, type, category, date, cents, paymentMethod }: TransactionInput) {
+    return insert.get(description, type, category, date, cents, paymentMethod ?? null) as Transaction;
   }
 
   return {
@@ -44,8 +57,8 @@ export function openTransactionStore(filename: string) {
       const plan = input.installments;
       if (plan === undefined) {
         if (id === undefined) return [insertTransaction(entry)];
-        const { description, type, category, date, cents } = entry;
-        const row = update.get(description, type, category, date, cents, validId(id));
+        const { description, type, category, date, cents, paymentMethod } = entry;
+        const row = update.get(description, type, category, date, cents, paymentMethod ?? null, validId(id));
         if (!row) throw new Error('Lançamento não encontrado.');
         return [row as Transaction];
       }

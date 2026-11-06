@@ -5,6 +5,7 @@ import { Choice, DatePicker } from './controls';
 import { Dashboard } from './Dashboard';
 import { dateFormat, money } from './format';
 import logo from './mesh.svg?no-inline';
+import { paymentLabel, paymentOptions } from './payment';
 
 declare global {
   interface Window {
@@ -14,6 +15,7 @@ declare global {
 
 const api = window.meshTransactions;
 const types = [{ value: 'all', label: 'Todos os tipos' }, { value: 'income', label: 'Receitas' }, { value: 'expense', label: 'Despesas' }];
+const paymentFilters = [{ value: 'all', label: 'Todas as formas' }, ...paymentOptions];
 
 export function App() {
   const [screen, setScreen] = useState<'dashboard' | 'transactions'>('dashboard');
@@ -24,6 +26,7 @@ export function App() {
   const [saveNotice, setSaveNotice] = useState('');
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('all');
   const [editing, setEditing] = useState<Transaction | null | undefined>();
   const [deleting, setDeleting] = useState<Transaction>();
   const [deleteError, setDeleteError] = useState(false);
@@ -43,6 +46,7 @@ export function App() {
   const expenses = monthEntries.reduce((sum, entry) => sum + (entry.type === 'expense' ? entry.cents : 0), 0);
   const search = query.trim().toLocaleLowerCase('pt-BR');
   const visible = monthEntries.filter((entry) => (kind === 'all' || entry.type === kind)
+    && (paymentFilter === 'all' || (entry.paymentMethod ?? '') === paymentFilter)
     && `${entry.description} ${entry.category}`.toLocaleLowerCase('pt-BR').includes(search));
 
   async function save(input: TransactionDraft, id?: number) {
@@ -115,7 +119,12 @@ export function App() {
         </section>
 
         {screen === 'dashboard' && entries ? (
-          <Dashboard entries={monthEntries} onHistory={() => { setKind('all'); setQuery(''); setScreen('transactions'); }} />
+          <Dashboard entries={monthEntries} onHistory={() => {
+            setKind('all');
+            setQuery('');
+            setPaymentFilter('all');
+            setScreen('transactions');
+          }} />
         ) : <section className="ledger" aria-labelledby="ledger-title">
           <div className="section-heading ledger-heading">
             <div>
@@ -125,6 +134,7 @@ export function App() {
             {screen === 'transactions' && <div className="filters">
               <input type="search" aria-label="Buscar lançamentos" placeholder="Buscar lançamentos" value={query} onChange={(event) => setQuery(event.target.value)} />
               <Choice label="Tipo de lançamento" value={kind} options={types} onChange={setKind} />
+              <Choice label="Filtrar por forma de pagamento" value={paymentFilter} options={paymentFilters} onChange={setPaymentFilter} />
             </div>}
           </div>
           {!api ? <div className="empty"><p>Abra o Mesh no Electron para acessar seus lançamentos.</p></div>
@@ -146,7 +156,7 @@ export function App() {
                     <tbody role="rowgroup">
                       {visible.map((entry) => (
                         <tr key={entry.id} role="row">
-                          <th scope="row">{entry.description}<span className="row-type">{entry.type === 'income' ? 'Receita' : 'Despesa'}</span></th>
+                          <th scope="row">{entry.description}<span className="row-type">{entry.type === 'income' ? 'Receita' : 'Despesa'} · {paymentLabel(entry.paymentMethod)}</span></th>
                           <td>{entry.category}</td>
                           <td className="date"><time dateTime={entry.date}>{dateFormat.format(new Date(entry.date))}</time></td>
                           <td className="number amount">{entry.type === 'income' ? '+' : '−'}{money(entry.cents)}</td>

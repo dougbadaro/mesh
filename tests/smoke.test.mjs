@@ -4,8 +4,44 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { URL } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 import { _electron } from 'playwright';
 import { openTransactionStore } from '../dist/main/transaction-store.js';
+
+test('abre um banco antigo e permite classificar um lançamento existente', async () => {
+  const profile = await mkdtemp(join(tmpdir(), 'mesh-migration-'));
+  const filename = join(profile, 'mesh.sqlite');
+  try {
+    const legacy = new DatabaseSync(filename);
+    legacy.exec(`
+      CREATE TABLE transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT NOT NULL, type TEXT NOT NULL,
+        category TEXT NOT NULL, date TEXT NOT NULL, cents INTEGER NOT NULL
+      ) STRICT;
+      INSERT INTO transactions (description, type, category, date, cents)
+      VALUES ('Compra antiga', 'expense', 'Mercado', '2026-10-01', 2500);
+    `);
+    legacy.close();
+    const store = openTransactionStore(filename);
+    try {
+      const [entry] = store.list();
+      assert.equal(entry.paymentMethod, null);
+      assert.throws(() => store.save({ ...entry, paymentMethod: 'inválido' }, entry.id));
+      store.save({ ...entry, paymentMethod: 'credit' }, entry.id);
+      assert.deepEqual(store.list().map((row) => ({ ...row })), [{ ...entry, paymentMethod: 'credit' }]);
+    } finally {
+      store.close();
+    }
+    const reopened = openTransactionStore(filename);
+    try {
+      assert.equal(reopened.list()[0].paymentMethod, 'credit');
+    } finally {
+      reopened.close();
+    }
+  } finally {
+    await rm(profile, { recursive: true, force: true, maxRetries: 3 });
+  }
+});
 
 test('gera só as parcelas restantes e preserva o dia de vencimento quando possível', () => {
   const store = openTransactionStore(':memory:');
@@ -54,6 +90,8 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       await page.getByLabel('Valor (R$)').fill('R$ 1.124,90');
       await page.getByRole('button', { name: 'Categoria', exact: true }).click();
       await page.getByRole('button', { name: 'Alimentação', exact: true }).click();
+      await page.getByRole('button', { name: 'Forma de pagamento', exact: true }).click({ timeout: 5000 });
+      await page.getByRole('button', { name: 'Cartão de crédito', exact: true }).click();
       const date = page.getByRole('button', { name: 'Data', exact: true });
       await date.click();
       await page.getByRole('button', { name: /Selecionar dia 1 de / }).click();
@@ -86,7 +124,15 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       const page = await reopened.firstWindow();
       await page.getByRole('heading', { name: 'Dashboard', exact: true }).waitFor();
       await page.getByText('Mercado do bairro', { exact: true }).waitFor();
+      const payments = page.getByRole('region', { name: 'Despesas por forma de pagamento' });
+      await payments.getByText('Cartão de crédito', { exact: true }).waitFor();
+      await payments.getByText(/1\.124,90/).waitFor();
       await page.getByRole('button', { name: 'Lançamentos', exact: true }).click();
+      await page.getByRole('button', { name: 'Filtrar por forma de pagamento', exact: true }).click();
+      await page.getByRole('button', { name: 'Pix', exact: true }).click();
+      await page.getByText('Nenhum resultado').waitFor();
+      await page.getByRole('button', { name: 'Filtrar por forma de pagamento', exact: true }).click();
+      await page.getByRole('button', { name: 'Todas as formas', exact: true }).click();
       const row = page.getByRole('row', { name: /Mercado do bairro.*1\.124,90/ });
       await row.waitFor();
       await page.getByLabel('Buscar lançamentos').fill('inexistente');
@@ -110,9 +156,13 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       await page.getByRole('spinbutton', { name: 'Parcela atual', exact: true }).fill('10');
       await page.getByRole('button', { name: 'Categoria', exact: true }).click();
       await page.getByRole('button', { name: 'Financiamento de veículo', exact: true }).click({ timeout: 5000 });
+      await page.getByRole('button', { name: 'Forma de pagamento', exact: true }).click();
+      await page.getByRole('button', { name: 'Boleto', exact: true }).click();
       await page.getByRole('button', { name: 'Salvar lançamento' }).click();
       await page.getByRole('row', { name: /Moto \(10\/24\).*Financiamento de veículo.*727,16/ }).waitFor();
-      assert.equal(await page.evaluate(async () => (await globalThis.meshTransactions.list()).length), 16);
+      const entries = await page.evaluate(() => globalThis.meshTransactions.list());
+      assert.equal(entries.length, 16);
+      assert.equal(entries.filter((entry) => entry.paymentMethod === 'boleto').length, 15);
     } finally {
       await reopened.close();
     }

@@ -139,6 +139,7 @@ dialog::backdrop { background: #000b; }
 
 .dashboard-grid { display: grid; grid-template-columns: 1fr 1.15fr; align-items: start; gap: 18px; }
 .dashboard-panel { min-width: 0; padding: 20px 24px; border-radius: 12px; background: var(--surface); }
+.dashboard-recent { grid-column: 1 / -1; }
 .dashboard-panel > h2, .dashboard-panel > .section-heading { min-height: 36px; align-content: center; }
 .dashboard-empty { color: var(--muted); font-size: 14px; padding-block: 14px; }
 .spending, .recent { margin: 0; padding: 0; list-style: none; }
