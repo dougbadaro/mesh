@@ -1,5 +1,15 @@
 import { DatabaseSync } from 'node:sqlite';
-import { validateTransaction, type Transaction, type TransactionInput } from './transactions.js';
+import { validateTransaction, validInstallments, type Transaction, type TransactionDraft, type TransactionInput } from './transactions.js';
+
+function installmentDate(date: string, offset: number) {
+  const month = new Date(date.slice(0, 7) + '-01T00:00:00Z');
+  month.setUTCMonth(month.getUTCMonth() + offset);
+  if (month.getUTCFullYear() > 9999) throw new Error('Data da parcela fora do intervalo.');
+  const lastDay = new Date(month);
+  lastDay.setUTCMonth(lastDay.getUTCMonth() + 1, 0);
+  month.setUTCDate(Math.min(Number(date.slice(8)), lastDay.getUTCDate()));
+  return month.toISOString().slice(0, 10);
+}
 
 export function openTransactionStore(filename: string) {
   const db = new DatabaseSync(filename);
@@ -23,15 +33,40 @@ export function openTransactionStore(filename: string) {
     return id;
   }
 
+  function insertTransaction({ description, type, category, date, cents }: TransactionInput) {
+    return insert.get(description, type, category, date, cents) as Transaction;
+  }
+
   return {
     list: () => list.all() as Transaction[],
-    save(input: TransactionInput, id?: number): Transaction {
-      const { description, type, category, date, cents } = validateTransaction(input);
-      const row = id === undefined
-        ? insert.get(description, type, category, date, cents)
-        : update.get(description, type, category, date, cents, validId(id));
-      if (!row) throw new Error('Lançamento não encontrado.');
-      return row as Transaction;
+    save(input: TransactionDraft, id?: number): Transaction[] {
+      const entry = validateTransaction(input);
+      const plan = input.installments;
+      if (plan === undefined) {
+        if (id === undefined) return [insertTransaction(entry)];
+        const { description, type, category, date, cents } = entry;
+        const row = update.get(description, type, category, date, cents, validId(id));
+        if (!row) throw new Error('Lançamento não encontrado.');
+        return [row as Transaction];
+      }
+
+      if (!plan || id !== undefined || entry.type !== 'expense' || !validInstallments(plan)) {
+        throw new Error('Parcelamento inválido.');
+      }
+      const rows = Array.from({ length: plan.total - plan.current + 1 }, (_, offset) => validateTransaction({
+        ...entry,
+        description: `${entry.description} (${plan.current + offset}/${plan.total})`,
+        date: installmentDate(entry.date, offset),
+      }));
+      db.exec('BEGIN');
+      try {
+        const saved = rows.map(insertTransaction);
+        db.exec('COMMIT');
+        return saved;
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
     },
     remove(id: number) {
       if (!remove.run(validId(id)).changes) throw new Error('Lançamento não encontrado.');

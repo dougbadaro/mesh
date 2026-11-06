@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { categories, type Transaction, type TransactionInput } from '../main/transactions';
+import { categories, maxInstallments, validInstallments, type Transaction, type TransactionDraft, type TransactionInput } from '../main/transactions';
 import { Choice, DatePicker } from './controls';
+import { parseReais } from './format';
 
 const types = [{ value: 'expense', label: 'Despesa' }, { value: 'income', label: 'Receita' }];
 const categoryOptions = categories.map((category) => ({ value: category, label: category }));
@@ -37,7 +38,7 @@ export function Modal({ children, title, busy, onClose }: {
 
 export function TransactionForm({ entry, onSave, onClose }: {
   entry: Transaction | null;
-  onSave(input: TransactionInput, id?: number): Promise<void>;
+  onSave(input: TransactionDraft, id?: number): Promise<void>;
   onClose(): void;
 }) {
   const [error, setError] = useState('');
@@ -45,28 +46,34 @@ export function TransactionForm({ entry, onSave, onClose }: {
   const [type, setType] = useState<TransactionInput['type']>(entry?.type ?? 'expense');
   const [category, setCategory] = useState<TransactionInput['category'] | ''>(entry?.category ?? '');
   const [date, setDate] = useState(entry?.date ?? today());
+  const [parcelled, setParcelled] = useState(false);
+  const canParcel = !entry && type === 'expense';
+  const isParcelled = canParcel && parcelled;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
     const fields = new FormData(event.currentTarget);
-    const amount = String(fields.get('amount')).trim();
+    const cents = parseReais(String(fields.get('amount')));
     const description = String(fields.get('description')).trim();
     if (!description) return setError('Informe a descrição.');
-    if (!/^\d{1,10}(?:[,.]\d{1,2})?$/.test(amount)) {
-      return setError('Use até duas casas decimais, como 42,90.');
-    }
-    const [whole, fraction = ''] = amount.split(/[,.]/);
-    const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+    if (cents === null) return setError('Informe um valor válido, como R$ 1.234,56.');
     if (!cents) return setError('Informe um valor maior que zero.');
     if (!category) return setError('Selecione uma categoria.');
+    const installments = isParcelled
+      ? { current: Number(fields.get('current')), total: Number(fields.get('total')) }
+      : undefined;
+    if (installments && !validInstallments(installments)) {
+      return setError('A parcela atual precisa estar entre 1 e o total de parcelas.');
+    }
+    if (isParcelled && description.length > 110) return setError('Use até 110 caracteres na descrição da compra.');
 
     setError('');
     setBusy(true);
     try {
       await onSave({
         description, date, cents,
-        type, category,
+        type, category, installments,
       }, entry?.id);
     } catch {
       setError('Não foi possível salvar. Tente novamente.');
@@ -79,22 +86,39 @@ export function TransactionForm({ entry, onSave, onClose }: {
       <form onSubmit={(event) => void submit(event)}>
         <fieldset disabled={busy} className="form-grid">
           <label className="full">Descrição
-            <input name="description" required maxLength={120} autoFocus defaultValue={entry?.description} placeholder="Ex.: Mercado da semana" />
+            <input name="description" required maxLength={isParcelled ? 110 : 120} autoFocus defaultValue={entry?.description} placeholder="Ex.: Mercado da semana" />
           </label>
           <div className="field"><span>Tipo</span>
             <Choice label="Tipo" value={type} options={types} onChange={(value) => setType(value as TransactionInput['type'])} />
           </div>
-          <label>Valor (R$)
-            <input name="amount" inputMode="decimal" required maxLength={13} placeholder="0,00"
+          <label>{isParcelled ? 'Valor da parcela (R$)' : 'Valor (R$)'}
+            <input name="amount" inputMode="decimal" required maxLength={24} placeholder="0,00"
               defaultValue={entry ? (entry.cents / 100).toFixed(2).replace('.', ',') : ''} />
           </label>
           <div className="field"><span>Categoria</span>
             <Choice label="Categoria" value={category} options={categoryOptions}
               onChange={(value) => setCategory(value as TransactionInput['category'])} />
           </div>
-          <div className="field"><span>Data</span>
-            <DatePicker label="Data" value={date} onChange={setDate} />
+          <div className="field"><span>{isParcelled ? 'Data da parcela atual' : 'Data'}</span>
+            <DatePicker label={isParcelled ? 'Data da parcela atual' : 'Data'} value={date} onChange={setDate} />
           </div>
+          {canParcel && (
+            <label className="full installment-toggle">
+              <input type="checkbox" checked={parcelled} onChange={(event) => setParcelled(event.target.checked)} />
+              Compra parcelada
+            </label>
+          )}
+          {isParcelled && (
+            <>
+              <label>Total de parcelas
+                <input name="total" type="number" min={2} max={maxInstallments} step={1} required placeholder="Ex.: 24" />
+              </label>
+              <label>Parcela atual
+                <input name="current" type="number" min={1} max={maxInstallments} step={1} required defaultValue={1} />
+              </label>
+              <p className="full installment-help">O Mesh registra a parcela atual e as seguintes, uma por mês.</p>
+            </>
+          )}
         </fieldset>
         {error && <p className="error" role="alert">{error}</p>}
         <div className="dialog-actions">

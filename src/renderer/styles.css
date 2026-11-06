@@ -95,6 +95,9 @@ dialog::backdrop { background: #000b; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; border: 0; padding: 0; margin: 18px 0 0; }
 .form-grid .full { grid-column: 1 / -1; }
 .form-grid input, .form-grid select { font-size: 15px; }
+.form-grid .installment-toggle { display: flex; align-items: center; gap: 10px; min-height: 36px; cursor: pointer; }
+.installment-toggle input { width: 17px; height: 17px; min-height: 0; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.installment-help { font-size: 13px; color: var(--muted); }
 .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-block-start: 20px; }
 .delete-copy, .error { margin-block-start: 12px; overflow-wrap: anywhere; }
 .error { color: var(--danger); }

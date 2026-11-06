@@ -11,10 +11,18 @@ export type TransactionInput = {
 };
 
 export type Transaction = TransactionInput & { id: number };
+export type InstallmentPlan = { current: number; total: number };
+export type TransactionDraft = TransactionInput & { installments?: InstallmentPlan };
+export const maxInstallments = 120;
+
+export function validInstallments({ current, total }: InstallmentPlan) {
+  return Number.isInteger(total) && total >= 2 && total <= maxInstallments
+    && Number.isInteger(current) && current >= 1 && current <= total;
+}
 
 export interface TransactionsApi {
   list(): Promise<Transaction[]>;
-  save(input: TransactionInput, id?: number): Promise<Transaction>;
+  save(input: TransactionDraft, id?: number): Promise<Transaction[]>;
   remove(id: number): Promise<void>;
 }
 

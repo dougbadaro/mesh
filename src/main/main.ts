@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, ipcMain, Menu, net, protocol, session, type IpcMainInvokeEvent } from 'electron';
 import { openTransactionStore } from './transaction-store.js';
-import type { TransactionInput } from './transactions.js';
+import type { TransactionDraft } from './transactions.js';
 
 const appUrl = 'financas://app/';
 const devUrl = process.env.MESH_RENDERER_URL;
@@ -55,7 +55,7 @@ void app.whenReady().then(() => {
     checkSender(event);
     return transactions.list();
   });
-  ipcMain.handle('transactions:save', (event, input: TransactionInput, id?: number) => {
+  ipcMain.handle('transactions:save', (event, input: TransactionDraft, id?: number) => {
     checkSender(event);
     return transactions.save(input, id);
   });

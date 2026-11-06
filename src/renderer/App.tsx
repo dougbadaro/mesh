@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Transaction, TransactionInput, TransactionsApi } from '../main/transactions';
+import type { Transaction, TransactionDraft, TransactionsApi } from '../main/transactions';
 import { Modal, today, TransactionForm } from './TransactionForm';
 import { Choice, DatePicker } from './controls';
 import { Dashboard } from './Dashboard';
@@ -44,12 +44,12 @@ export function App() {
   const visible = monthEntries.filter((entry) => (kind === 'all' || entry.type === kind)
     && `${entry.description} ${entry.category}`.toLocaleLowerCase('pt-BR').includes(search));
 
-  async function save(input: TransactionInput, id?: number) {
+  async function save(input: TransactionDraft, id?: number) {
     if (!api) return;
     const saved = await api.save(input, id);
-    setEntries((current) => [saved, ...(current ?? []).filter((entry) => entry.id !== saved.id)]
+    setEntries((current) => [...saved, ...(current ?? []).filter((entry) => entry.id !== id)]
       .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id));
-    setMonth(saved.date.slice(0, 7));
+    setMonth(input.date.slice(0, 7));
     setKind('all');
     setQuery('');
     setEditing(undefined);
