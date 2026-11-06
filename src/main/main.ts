@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, ipcMain, Menu, net, protocol, session, type IpcMainInvokeEvent } from 'electron';
 import { openTransactionStore } from './transaction-store.js';
 import type { TransactionDraft } from './transactions.js';
+import type { CardCycleSettings } from './card-cycle.js';
 
 const appUrl = 'financas://app/';
 const devUrl = process.env.MESH_RENDERER_URL;
@@ -60,6 +61,14 @@ void app.whenReady().then(() => {
     }
   }
 
+  ipcMain.handle('card-cycle:get', (event) => {
+    checkSender(event);
+    return transactions.getCardCycle();
+  });
+  ipcMain.handle('card-cycle:save', (event, settings: CardCycleSettings) => {
+    checkSender(event);
+    transactions.saveCardCycle(settings);
+  });
   ipcMain.handle('transactions:list', (event) => {
     checkSender(event);
     return transactions.list();

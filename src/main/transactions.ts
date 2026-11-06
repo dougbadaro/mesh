@@ -1,3 +1,5 @@
+import type { CardCycleSettings } from './card-cycle.js';
+
 export const categories = [
   'Academia e esportes',
   'Alimentação',
@@ -71,6 +73,8 @@ export function installmentReference(description: string) {
 }
 
 export interface TransactionsApi {
+  getCardCycle(): Promise<CardCycleSettings | null>;
+  saveCardCycle(settings: CardCycleSettings): Promise<void>;
   list(): Promise<Transaction[]>;
   save(input: TransactionDraft, id?: number): Promise<Transaction[]>;
   remove(id: number): Promise<void>;

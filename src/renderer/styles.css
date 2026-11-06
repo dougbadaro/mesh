@@ -146,6 +146,10 @@ dialog::backdrop { background: #000b; }
 .dashboard-panel { min-width: 0; padding: 20px 24px; border-radius: 12px; background: var(--surface); }
 .dashboard-recent { grid-column: 1 / -1; }
 .credit-spending { margin-block-end: 18px; }
+.card-cycle { margin-block-end: 18px; }
+.cycle-fields { max-width: 440px; }
+.cycle-purchase { margin-block-start: 12px; }
+.cycle-note { margin-block-start: 12px; color: var(--muted); font-size: 14px; }
 .dashboard-panel > h2, .dashboard-panel > .section-heading { min-height: 36px; align-content: center; }
 .dashboard-empty { color: var(--muted); font-size: 14px; padding-block: 14px; }
 .spending, .recent { margin: 0; padding: 0; list-style: none; }

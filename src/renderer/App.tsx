@@ -3,6 +3,7 @@ import type { Transaction, TransactionDraft, TransactionsApi } from '../main/tra
 import { Modal, today, TransactionForm } from './TransactionForm';
 import { Choice, DatePicker } from './controls';
 import { CreditSpending, Dashboard } from './Dashboard';
+import { CardCycle } from './CardCycle';
 import { dateFormat, money } from './format';
 import logo from './mesh.svg?no-inline';
 import { paymentLabel, paymentOptions } from './payment';
@@ -152,6 +153,7 @@ export function App() {
           </dl>
         </section>
 
+        {isCredit && api && <CardCycle api={api} />}
         {isCredit && entries && <CreditSpending entries={screenEntries} allCreditEntries={creditEntries} month={month} />}
         {screen === 'dashboard' && entries ? (
           <Dashboard entries={monthEntries} onHistory={() => {

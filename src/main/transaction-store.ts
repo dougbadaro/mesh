@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { validCardCycle, type CardCycleSettings } from './card-cycle.js';
 import { installmentReference, validateTransaction, validInstallments, type Transaction, type TransactionDraft, type TransactionInput } from './transactions.js';
 
 function installmentDate(date: string, offset: number) {
@@ -27,6 +28,13 @@ export function openTransactionStore(filename: string) {
         paymentMethod TEXT
       ) STRICT
     `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS card_cycle (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        closingDay INTEGER NOT NULL CHECK(closingDay BETWEEN 1 AND 31),
+        dueDay INTEGER NOT NULL CHECK(dueDay BETWEEN 1 AND 31)
+      ) STRICT
+    `);
     const columns = db.prepare('PRAGMA table_info(transactions)').all();
     if (!columns.some((column) => column.name === 'paymentMethod')) {
       db.exec('ALTER TABLE transactions ADD COLUMN paymentMethod TEXT');
@@ -47,6 +55,11 @@ export function openTransactionStore(filename: string) {
     RETURNING *
   `);
   const remove = db.prepare('DELETE FROM transactions WHERE id = ?');
+  const getCardCycle = db.prepare('SELECT closingDay, dueDay FROM card_cycle WHERE id = 1');
+  const saveCardCycle = db.prepare(`
+    INSERT INTO card_cycle (id, closingDay, dueDay) VALUES (1, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET closingDay = excluded.closingDay, dueDay = excluded.dueDay
+  `);
 
   function validId(id: number) {
     if (!Number.isSafeInteger(id) || id < 1) throw new Error('Lançamento inválido.');
@@ -76,6 +89,11 @@ export function openTransactionStore(filename: string) {
   }
 
   return {
+    getCardCycle: () => (getCardCycle.get() as CardCycleSettings | undefined) ?? null,
+    saveCardCycle(settings: CardCycleSettings) {
+      if (!validCardCycle(settings)) throw new Error('Dias do cartão inválidos.');
+      saveCardCycle.run(settings.closingDay, settings.dueDay);
+    },
     list: () => list.all() as Transaction[],
     save(input: TransactionDraft, id?: number): Transaction[] {
       const entry = validateTransaction(input);

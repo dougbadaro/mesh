@@ -7,6 +7,18 @@ import { URL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { _electron } from 'playwright';
 import { openTransactionStore } from '../dist/main/transaction-store.js';
+import { cardCycleForDate } from '../dist/main/card-cycle.js';
+
+test('calcula os vencimentos antes, no dia e depois do fechamento', () => {
+  const settings = { closingDay: 28, dueDay: 5 };
+  assert.equal(cardCycleForDate('2026-12-27', settings).due, '2027-01-05');
+  assert.equal(cardCycleForDate('2026-12-28', settings).alternativeDue, '2027-02-05');
+  assert.equal(cardCycleForDate('2026-12-29', settings).due, '2027-02-05');
+  const shortMonth = cardCycleForDate('2027-02-27', { closingDay: 31, dueDay: 5 });
+  assert.equal(shortMonth.closing, '2027-02-28');
+  assert.equal(shortMonth.bestDay, '2027-03-01');
+  assert.equal(cardCycleForDate('2026-11-11', { closingDay: 10, dueDay: 20 }).due, '2026-12-20');
+});
 
 test('abre um banco antigo e permite classificar um lançamento existente', async () => {
   const profile = await mkdtemp(join(tmpdir(), 'mesh-migration-'));
@@ -24,6 +36,9 @@ test('abre um banco antigo e permite classificar um lançamento existente', asyn
     legacy.close();
     const store = openTransactionStore(filename);
     try {
+      assert.equal(store.getCardCycle(), null);
+      assert.throws(() => store.saveCardCycle({ closingDay: 32, dueDay: 5 }));
+      store.saveCardCycle({ closingDay: 25, dueDay: 5 });
       const [entry] = store.list();
       assert.equal(entry.paymentMethod, null);
       assert.throws(() => store.save({ ...entry, paymentMethod: 'inválido' }, entry.id));
@@ -34,6 +49,7 @@ test('abre um banco antigo e permite classificar um lançamento existente', asyn
     }
     const reopened = openTransactionStore(filename);
     try {
+      assert.deepEqual({ ...reopened.getCardCycle() }, { closingDay: 25, dueDay: 5 });
       assert.equal(reopened.list()[0].paymentMethod, 'credit');
     } finally {
       reopened.close();
@@ -147,6 +163,12 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       await page.getByRole('navigation', { name: 'Principal' })
         .getByRole('button', { name: 'Cartão de crédito', exact: true }).click({ timeout: 5000 });
       await page.getByRole('heading', { name: 'Cartão de crédito', exact: true }).waitFor();
+      const cycle = page.getByRole('region', { name: 'Melhor dia de compra' });
+      await cycle.getByLabel('Dia do fechamento').fill('10');
+      await cycle.getByLabel('Dia do vencimento').fill('20');
+      await cycle.getByRole('button', { name: 'Salvar ciclo' }).click();
+      await cycle.getByText('Vencimento estimado', { exact: true }).waitFor();
+      assert.deepEqual(await page.evaluate(() => globalThis.meshTransactions.getCardCycle()), { closingDay: 10, dueDay: 20 });
       const credit = page.getByRole('region', { name: 'Resumo do cartão' });
       await credit.getByText('R$ 1.124,90', { exact: true }).first().waitFor();
       await page.getByRole('row', { name: /Mercado do bairro/ }).waitFor();
