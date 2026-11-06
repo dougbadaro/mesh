@@ -50,12 +50,16 @@ export function TransactionForm({ entry, month, defaultPayment, onSave, onClose 
   const [category, setCategory] = useState<TransactionInput['category'] | ''>(entry?.category ?? '');
   const [payment, setPayment] = useState<PaymentMethod | ''>(entry ? entry.paymentMethod ?? '' : defaultPayment);
   const [applyPayment, setApplyPayment] = useState(false);
+  const [manualInvoice, setManualInvoice] = useState(false);
+  const [invoiceMonth, setInvoiceMonth] = useState<string>();
   const reference = entry?.type === 'expense' ? installmentReference(entry.description) : null;
   const canApplyPayment = Boolean(payment && type === 'expense' && reference && reference.current < reference.total);
   const [date, setDate] = useState(() => {
     const currentDate = today();
     return entry?.date ?? (currentDate.startsWith(month) ? currentDate : month + '-01');
   });
+  const isCredit = type === 'expense' && payment === 'credit';
+  const selectedInvoice = invoiceMonth ?? entry?.billingMonth ?? date.slice(0, 7);
   const [parcelled, setParcelled] = useState(false);
   const canParcel = !entry && type === 'expense';
   const isParcelled = canParcel && parcelled;
@@ -84,6 +88,7 @@ export function TransactionForm({ entry, month, defaultPayment, onSave, onClose 
       await onSave({
         description, date, cents,
         type, category, installments, paymentMethod: payment || null,
+        billingMonth: isCredit && manualInvoice ? selectedInvoice : undefined,
         applyPaymentToFuture: canApplyPayment && applyPayment,
       }, entry?.id);
     } catch {
@@ -117,6 +122,20 @@ export function TransactionForm({ entry, month, defaultPayment, onSave, onClose 
             <Choice label="Forma de pagamento" value={payment} options={paymentOptions}
               onChange={(value) => setPayment(value as PaymentMethod | '')} />
           </div>
+          {isCredit && (
+            <>
+              <label className="full installment-toggle">
+                <input type="checkbox" checked={manualInvoice} onChange={(event) => setManualInvoice(event.target.checked)} />
+                Definir mês da fatura manualmente
+              </label>
+              {manualInvoice && (
+                <div className="field full"><span>Mês da fatura</span>
+                  <DatePicker label="Mês da fatura" value={selectedInvoice} onChange={setInvoiceMonth} monthOnly />
+                </div>
+              )}
+              {!manualInvoice && <p className="full installment-help">O Mesh usa o ciclo configurado. Em compras no dia do fechamento, confira a fatura do banco.</p>}
+            </>
+          )}
           {canApplyPayment && (
             <label className="full installment-toggle">
               <input type="checkbox" checked={applyPayment} onChange={(event) => setApplyPayment(event.target.checked)} />

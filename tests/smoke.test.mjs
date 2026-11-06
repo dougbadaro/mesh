@@ -20,6 +20,24 @@ test('calcula os vencimentos antes, no dia e depois do fechamento', () => {
   assert.equal(cardCycleForDate('2026-11-11', { closingDay: 10, dueDay: 20 }).due, '2026-12-20');
 });
 
+test('grava a fatura das compras no crédito e encadeia as parcelas sem mudar a data da compra', () => {
+  const store = openTransactionStore(':memory:');
+  try {
+    const draft = { description: 'Compra', type: 'expense', category: 'Mercado', cents: 5000, date: '2026-11-11', paymentMethod: 'credit' };
+    const [legacy] = store.save(draft);
+    store.saveCardCycle({ closingDay: 10, dueDay: 20 });
+    assert.equal(store.list().find(({ id }) => id === legacy.id).billingMonth, null);
+    const saved = store.save({ ...draft, installments: { current: 1, total: 3 } });
+    assert.deepEqual(saved.map(({ date, billingMonth }) => [date, billingMonth]), [
+      ['2026-11-11', '2026-12'], ['2026-12-11', '2027-01'], ['2027-01-11', '2027-02'],
+    ]);
+    assert.equal(store.save({ ...draft, billingMonth: '2026-11' }, saved[0].id)[0].billingMonth, '2026-11');
+    assert.equal(store.save({ ...draft, paymentMethod: 'pix' })[0].billingMonth, null);
+  } finally {
+    store.close();
+  }
+});
+
 test('abre um banco antigo e permite classificar um lançamento existente', async () => {
   const profile = await mkdtemp(join(tmpdir(), 'mesh-migration-'));
   const filename = join(profile, 'mesh.sqlite');
@@ -43,7 +61,9 @@ test('abre um banco antigo e permite classificar um lançamento existente', asyn
       assert.equal(entry.paymentMethod, null);
       assert.throws(() => store.save({ ...entry, paymentMethod: 'inválido' }, entry.id));
       store.save({ ...entry, paymentMethod: 'credit' }, entry.id);
-      assert.deepEqual(store.list().map((row) => ({ ...row })), [{ ...entry, paymentMethod: 'credit' }]);
+      assert.deepEqual(store.list().map((row) => ({ ...row })), [
+        { ...entry, paymentMethod: 'credit', billingMonth: '2026-11' },
+      ]);
     } finally {
       store.close();
     }
@@ -169,12 +189,33 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       await cycle.getByRole('button', { name: 'Salvar ciclo' }).click();
       await cycle.getByText('Vencimento estimado', { exact: true }).waitFor();
       assert.deepEqual(await page.evaluate(() => globalThis.meshTransactions.getCardCycle()), { closingDay: 10, dueDay: 20 });
+      await page.getByRole('button', { name: 'Novo lançamento' }).click();
+      await page.getByLabel('Descrição').fill('Compra após o fechamento');
+      await page.getByLabel('Valor (R$)').fill('17,00');
+      await page.getByRole('button', { name: 'Categoria', exact: true }).click();
+      await page.getByRole('button', { name: 'Alimentação', exact: true }).click();
+      await page.getByRole('button', { name: 'Data', exact: true }).click();
+      await page.getByRole('button', { name: /Selecionar dia 11 de / }).click();
+      await page.getByRole('button', { name: 'Salvar lançamento' }).click();
+      await page.getByRole('status').filter({ hasText: /Fatura de / }).waitFor({ timeout: 5000 });
+      assert.equal(await page.getByRole('row', { name: /Compra após o fechamento/ }).count(), 0);
       const credit = page.getByRole('region', { name: 'Resumo do cartão' });
       await credit.getByText('R$ 1.124,90', { exact: true }).first().waitFor();
       await page.getByRole('row', { name: /Mercado do bairro/ }).waitFor();
       assert.equal(await page.getByRole('row', { name: /Compra via Pix/ }).count(), 0);
       const upcoming = page.getByRole('region', { name: 'Crédito já lançado para os próximos meses' });
-      await upcoming.getByText(/^R\$\s*50,00$/).waitFor({ timeout: 5000 });
+      await upcoming.getByText(/^R\$\s*67,00$/).waitFor({ timeout: 5000 });
+      const posted = await page.evaluate(async () =>
+        (await globalThis.meshTransactions.list()).find(({ description }) => description === 'Compra após o fechamento'));
+      const invoice = new Date(posted.billingMonth + '-01T00:00:00Z');
+      const invoiceMonth = new Intl.DateTimeFormat('pt-BR', { month: 'short', timeZone: 'UTC' }).format(invoice).replace('.', '');
+      const invoicePicker = page.getByRole('button', { name: 'Mês da fatura', exact: true });
+      await invoicePicker.click();
+      if (invoice.getUTCMonth() === 0) await page.getByRole('button', { name: 'Próximo ano', exact: true }).click();
+      await page.getByRole('button', { name: invoiceMonth, exact: true }).click();
+      await page.getByRole('row', { name: /Compra após o fechamento/ }).waitFor();
+      await invoicePicker.click();
+      await page.getByRole('button', { name: 'Mês atual', exact: true }).click();
       assert.equal(await reopened.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMaximized()), true);
       await page.getByRole('button', { name: 'Lançamentos', exact: true }).click();
       await page.getByRole('button', { name: 'Filtrar por forma de pagamento', exact: true }).click();
@@ -215,7 +256,7 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       await page.getByRole('button', { name: 'Salvar lançamento' }).click();
       await page.getByRole('status').filter({ hasText: '14 parcelas futuras' }).waitFor();
       const entries = await page.evaluate(() => globalThis.meshTransactions.list());
-      assert.equal(entries.length, 18);
+      assert.equal(entries.length, 19);
       assert.equal(entries.filter((entry) => entry.description.startsWith('Moto ') && entry.paymentMethod === 'credit').length, 15);
     } finally {
       await reopened.close();

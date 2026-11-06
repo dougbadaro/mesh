@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { validCardCycle, type CardCycleSettings } from './card-cycle.js';
+import { cardCycleForDate, shiftBillingMonth, validCardCycle, type CardCycleSettings } from './card-cycle.js';
 import { installmentReference, validateTransaction, validInstallments, type Transaction, type TransactionDraft, type TransactionInput } from './transactions.js';
 
 function installmentDate(date: string, offset: number) {
@@ -25,7 +25,8 @@ export function openTransactionStore(filename: string) {
         category TEXT NOT NULL,
         date TEXT NOT NULL,
         cents INTEGER NOT NULL CHECK(cents BETWEEN 1 AND 999999999999),
-        paymentMethod TEXT
+        paymentMethod TEXT,
+        billingMonth TEXT
       ) STRICT
     `);
     db.exec(`
@@ -39,17 +40,20 @@ export function openTransactionStore(filename: string) {
     if (!columns.some((column) => column.name === 'paymentMethod')) {
       db.exec('ALTER TABLE transactions ADD COLUMN paymentMethod TEXT');
     }
+    if (!columns.some((column) => column.name === 'billingMonth')) {
+      db.exec('ALTER TABLE transactions ADD COLUMN billingMonth TEXT');
+    }
     db.exec('COMMIT');
   } catch (error) {
     db.close();
     throw error;
   }
   const list = db.prepare('SELECT * FROM transactions ORDER BY date DESC, id DESC');
-  const insert = db.prepare('INSERT INTO transactions (description, type, category, date, cents, paymentMethod) VALUES (?, ?, ?, ?, ?, ?) RETURNING *');
-  const update = db.prepare('UPDATE transactions SET description = ?, type = ?, category = ?, date = ?, cents = ?, paymentMethod = ? WHERE id = ? RETURNING *');
+  const insert = db.prepare('INSERT INTO transactions (description, type, category, date, cents, paymentMethod, billingMonth) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *');
+  const update = db.prepare('UPDATE transactions SET description = ?, type = ?, category = ?, date = ?, cents = ?, paymentMethod = ?, billingMonth = ? WHERE id = ? RETURNING *');
   const get = db.prepare('SELECT * FROM transactions WHERE id = ?');
   const updateFuturePayment = db.prepare(`
-    UPDATE transactions SET paymentMethod = ?
+    UPDATE transactions SET paymentMethod = ?, billingMonth = ?
     WHERE id = ? AND description = ? AND type = 'expense' AND paymentMethod IS NULL
       AND substr(date, 1, 7) = ?
     RETURNING *
@@ -66,14 +70,27 @@ export function openTransactionStore(filename: string) {
     return id;
   }
 
-  function insertTransaction({ description, type, category, date, cents, paymentMethod }: TransactionInput) {
-    return insert.get(description, type, category, date, cents, paymentMethod ?? null) as Transaction;
+  function insertTransaction({ description, type, category, date, cents, paymentMethod, billingMonth }: TransactionInput) {
+    return insert.get(description, type, category, date, cents, paymentMethod ?? null, billingMonth ?? null) as Transaction;
   }
 
-  function editTransaction({ description, type, category, date, cents, paymentMethod }: TransactionInput, id: number) {
-    const row = update.get(description, type, category, date, cents, paymentMethod ?? null, id);
+  function editTransaction({ description, type, category, date, cents, paymentMethod, billingMonth }: TransactionInput, id: number) {
+    const row = update.get(description, type, category, date, cents, paymentMethod ?? null, billingMonth ?? null, id);
     if (!row) throw new Error('Lançamento não encontrado.');
     return row as Transaction;
+  }
+
+  function assignBillingMonth(entry: TransactionInput, original?: Transaction) {
+    if (entry.type !== 'expense' || entry.paymentMethod !== 'credit') return null;
+    if (entry.billingMonth) return entry.billingMonth;
+    if (original?.paymentMethod === 'credit' && original.type === 'expense' && original.date === entry.date) {
+      return original.billingMonth;
+    }
+    const settings = getCardCycle.get() as CardCycleSettings | undefined;
+    if (!settings) return null;
+    const due = cardCycleForDate(entry.date, settings).due;
+    if (!/^\d{4}-/.test(due)) throw new Error('Mês da fatura fora do intervalo.');
+    return due.slice(0, 7);
   }
 
   function atomic<T>(operation: () => T): T {
@@ -99,16 +116,14 @@ export function openTransactionStore(filename: string) {
       const entry = validateTransaction(input);
       const plan = input.installments;
       if (plan === undefined) {
-        if (id === undefined) return [insertTransaction(entry)];
+        if (id === undefined) return [insertTransaction({ ...entry, billingMonth: assignBillingMonth(entry) })];
         validId(id);
         const { paymentMethod } = entry;
-        if (input.applyPaymentToFuture !== true || !paymentMethod || entry.type !== 'expense') {
-          return [editTransaction(entry, id)];
-        }
-
         return atomic(() => {
           const original = get.get(id) as Transaction | undefined;
-          const updated = [editTransaction(entry, id)];
+          const billingMonth = assignBillingMonth(entry, original);
+          const updated = [editTransaction({ ...entry, billingMonth }, id)];
+          if (input.applyPaymentToFuture !== true || !paymentMethod || entry.type !== 'expense') return updated;
           const reference = original?.type === 'expense' ? installmentReference(original.description) : null;
           if (!reference || !original) return updated;
 
@@ -116,7 +131,8 @@ export function openTransactionStore(filename: string) {
           for (let offset = 1; offset <= reference.total - reference.current; offset++) {
             const date = installmentDate(original.date, offset);
             const description = `${reference.name} (${reference.current + offset}/${reference.total})`;
-            const row = updateFuturePayment.get(paymentMethod, id + offset, description, date.slice(0, 7));
+            const invoice = billingMonth ? shiftBillingMonth(billingMonth, offset) : null;
+            const row = updateFuturePayment.get(paymentMethod, invoice, id + offset, description, date.slice(0, 7));
             if (row) updated.push(row as Transaction);
           }
           return updated;
@@ -126,10 +142,12 @@ export function openTransactionStore(filename: string) {
       if (!plan || id !== undefined || entry.type !== 'expense' || !validInstallments(plan)) {
         throw new Error('Parcelamento inválido.');
       }
+      const billingMonth = assignBillingMonth(entry);
       const rows = Array.from({ length: plan.total - plan.current + 1 }, (_, offset) => validateTransaction({
         ...entry,
         description: `${entry.description} (${plan.current + offset}/${plan.total})`,
         date: installmentDate(entry.date, offset),
+        billingMonth: billingMonth ? shiftBillingMonth(billingMonth, offset) : null,
       }));
       return atomic(() => rows.map(insertTransaction));
     },

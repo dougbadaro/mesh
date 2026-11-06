@@ -4,7 +4,7 @@ import { Modal, today, TransactionForm } from './TransactionForm';
 import { Choice, DatePicker } from './controls';
 import { CreditSpending, Dashboard } from './Dashboard';
 import { CardCycle } from './CardCycle';
-import { dateFormat, money } from './format';
+import { dateFormat, money, monthFormat } from './format';
 import logo from './mesh.svg?no-inline';
 import { paymentLabel, paymentOptions } from './payment';
 
@@ -20,7 +20,7 @@ const paymentFilters = [{ value: 'all', label: 'Todas as formas' }, ...paymentOp
 const screens = {
   dashboard: { title: 'Dashboard', subtitle: 'Veja quanto entrou, quanto saiu e onde você gastou.' },
   transactions: { title: 'Lançamentos', subtitle: 'Consulte e organize suas receitas e despesas.' },
-  credit: { title: 'Cartão de crédito', subtitle: 'Acompanhe as despesas registradas no crédito por mês.' },
+  credit: { title: 'Cartão de crédito', subtitle: 'Acompanhe as despesas no crédito por mês da fatura.' },
 } as const;
 type Screen = keyof typeof screens;
 
@@ -53,7 +53,7 @@ export function App() {
   const expenses = monthEntries.reduce((sum, entry) => sum + (entry.type === 'expense' ? entry.cents : 0), 0);
   const isCredit = screen === 'credit';
   const creditEntries = isCredit ? (entries ?? []).filter((entry) => entry.type === 'expense' && entry.paymentMethod === 'credit') : [];
-  const screenEntries = isCredit ? creditEntries.filter((entry) => entry.date.startsWith(month)) : monthEntries;
+  const screenEntries = isCredit ? creditEntries.filter((entry) => (entry.billingMonth ?? entry.date.slice(0, 7)) === month) : monthEntries;
   const creditTotal = isCredit ? screenEntries.reduce((sum, entry) => sum + entry.cents, 0) : 0;
   const metrics = isCredit ? [
     { label: 'Total no crédito', value: money(creditTotal) },
@@ -88,7 +88,9 @@ export function App() {
       ? futureCount === 0 ? 'Nenhuma parcela futura sem forma de pagamento foi encontrada.'
         : `Forma de pagamento atualizada em ${futureCount} ${futureCount === 1 ? 'parcela futura' : 'parcelas futuras'}.`
       : '';
-    setSaveNotice([dateNotice, paymentNotice].filter(Boolean).join(' '));
+    const invoice = saved[0]?.billingMonth;
+    const billingNotice = invoice ? `Fatura de ${monthFormat.format(new Date(invoice + '-01T00:00:00Z'))}.` : '';
+    setSaveNotice([dateNotice, billingNotice, paymentNotice].filter(Boolean).join(' '));
     setKind('all');
     setQuery('');
     setEditing(undefined);
@@ -141,7 +143,7 @@ export function App() {
         <section className="summary" aria-labelledby="summary-title">
           <div className="section-heading">
             <h2 id="summary-title">{isCredit ? 'Resumo do cartão' : 'Resumo do mês'}</h2>
-            <DatePicker label="Mês de referência" value={month} onChange={(next) => {
+            <DatePicker label={isCredit ? 'Mês da fatura' : 'Mês de referência'} value={month} onChange={(next) => {
               setMonth(next);
               setSaveNotice('');
             }} monthOnly />

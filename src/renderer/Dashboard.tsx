@@ -1,5 +1,5 @@
 import type { Transaction } from '../main/transactions';
-import { dateFormat, money } from './format';
+import { dateFormat, money, monthFormat } from './format';
 import { paymentLabel } from './payment';
 
 function SpendingPanel({ id, title, spending }: { id: string; title: string; spending: Map<string, number> }) {
@@ -32,14 +32,12 @@ function spendingBy(entries: Transaction[], labelFor: (entry: Transaction) => st
   return groups;
 }
 
-const monthFormat = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-
 export function CreditSpending({ entries, allCreditEntries, month }: {
   entries: Transaction[];
   allCreditEntries: Transaction[];
   month: string;
 }) {
-  const totalsByMonth = spendingBy(allCreditEntries, (entry) => entry.date.slice(0, 7));
+  const totalsByMonth = spendingBy(allCreditEntries, (entry) => entry.billingMonth ?? entry.date.slice(0, 7));
   const nextMonth = new Date(month + '-01T00:00:00Z');
   const upcoming = [];
   for (let offset = 0; offset < 3; offset++) {
@@ -56,7 +54,7 @@ export function CreditSpending({ entries, allCreditEntries, month }: {
       {upcoming.length > 0 && (
         <section className="dashboard-panel" aria-labelledby="credit-upcoming">
           <h2 id="credit-upcoming">Crédito já lançado para os próximos meses</h2>
-          <p className="dashboard-empty">Soma das despesas no crédito registradas em cada mês futuro.</p>
+          <p className="dashboard-empty">Soma das despesas no crédito por mês de vencimento.</p>
           <ul className="spending">
             {upcoming.map(({ key, label, cents }) => (
               <li key={key}><div><span>{label}</span><strong>{money(cents)}</strong></div></li>

@@ -1,5 +1,12 @@
 export type CardCycleSettings = { closingDay: number; dueDay: number };
 
+export function shiftBillingMonth(month: string, offset: number) {
+  const date = new Date(month + '-01T00:00:00Z');
+  date.setUTCMonth(date.getUTCMonth() + offset);
+  if (date.getUTCFullYear() > 9999) throw new Error('Mês da fatura fora do intervalo.');
+  return date.toISOString().slice(0, 7);
+}
+
 export function validCardCycle(settings: CardCycleSettings) {
   return Boolean(settings && [settings.closingDay, settings.dueDay]
     .every((day) => Number.isInteger(day) && day >= 1 && day <= 31));

@@ -53,9 +53,10 @@ export type TransactionInput = {
   date: string;
   cents: number;
   paymentMethod?: PaymentMethod | null;
+  billingMonth?: string | null;
 };
 
-export type Transaction = TransactionInput & { id: number; paymentMethod: PaymentMethod | null };
+export type Transaction = TransactionInput & { id: number; paymentMethod: PaymentMethod | null; billingMonth: string | null };
 export type InstallmentPlan = { current: number; total: number };
 export type TransactionDraft = TransactionInput & { installments?: InstallmentPlan; applyPaymentToFuture?: boolean };
 export const maxInstallments = 120;
@@ -87,6 +88,10 @@ export function validateTransaction(input: TransactionInput): TransactionInput {
   if (input.type !== 'income' && input.type !== 'expense') throw new Error('Tipo inválido.');
   if (!categories.includes(input.category)) throw new Error('Categoria inválida.');
   const paymentMethod = input.paymentMethod ?? null;
+  const billingMonth = input.billingMonth ?? null;
+  if (billingMonth !== null && (typeof billingMonth !== 'string' || !/^(?!0000)\d{4}-(0[1-9]|1[0-2])$/.test(billingMonth))) {
+    throw new Error('Mês da fatura inválido.');
+  }
   if (paymentMethod !== null && (typeof paymentMethod !== 'string' || !Object.hasOwn(paymentMethods, paymentMethod))) {
     throw new Error('Forma de pagamento inválida.');
   }
@@ -100,5 +105,5 @@ export function validateTransaction(input: TransactionInput): TransactionInput {
   if (!Number.isFinite(date.getTime()) || !date.toISOString().startsWith(input.date)) {
     throw new Error('Data inválida.');
   }
-  return { description, type: input.type, category: input.category, date: input.date, cents: input.cents, paymentMethod };
+  return { description, type: input.type, category: input.category, date: input.date, cents: input.cents, paymentMethod, billingMonth };
 }
