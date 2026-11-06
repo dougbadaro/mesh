@@ -93,9 +93,9 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       await page.getByLabel('Total de parcelas').fill('24');
       await page.getByRole('spinbutton', { name: 'Parcela atual', exact: true }).fill('10');
       await page.getByRole('button', { name: 'Categoria', exact: true }).click();
-      await page.getByRole('button', { name: 'Transporte', exact: true }).click();
+      await page.getByRole('button', { name: 'Financiamento de veículo', exact: true }).click({ timeout: 5000 });
       await page.getByRole('button', { name: 'Salvar lançamento' }).click();
-      await page.getByRole('row', { name: /Moto \(10\/24\).*727,16/ }).waitFor();
+      await page.getByRole('row', { name: /Moto \(10\/24\).*Financiamento de veículo.*727,16/ }).waitFor();
       assert.equal(await page.evaluate(async () => (await globalThis.meshTransactions.list()).length), 15);
     } finally {
       await reopened.close();
