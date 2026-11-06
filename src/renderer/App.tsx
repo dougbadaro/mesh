@@ -21,6 +21,7 @@ export function App() {
   const [loadError, setLoadError] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [month, setMonth] = useState(() => today().slice(0, 7));
+  const [saveNotice, setSaveNotice] = useState('');
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('all');
   const [editing, setEditing] = useState<Transaction | null | undefined>();
@@ -49,7 +50,8 @@ export function App() {
     const saved = await api.save(input, id);
     setEntries((current) => [...saved, ...(current ?? []).filter((entry) => entry.id !== id)]
       .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id));
-    setMonth(input.date.slice(0, 7));
+    setSaveNotice(input.date.startsWith(month) ? '' :
+      `Salvo em ${dateFormat.format(new Date(input.date))}. O mês em exibição foi mantido.`);
     setKind('all');
     setQuery('');
     setEditing(undefined);
@@ -88,15 +90,22 @@ export function App() {
             <h1>{screen === 'dashboard' ? 'Dashboard' : 'Lançamentos'}</h1>
             <p>{screen === 'dashboard' ? 'Veja quanto entrou, quanto saiu e onde você gastou.' : 'Consulte e organize suas receitas e despesas.'}</p>
           </div>
-          <button type="button" className="primary" disabled={!entries} onClick={() => setEditing(null)}>
+          <button type="button" className="primary" disabled={!entries} onClick={() => {
+            setSaveNotice('');
+            setEditing(null);
+          }}>
             <span aria-hidden="true">+</span> Novo lançamento
           </button>
         </div>
 
+        {saveNotice && <p className="save-notice" role="status">{saveNotice}</p>}
         <section className="summary" aria-labelledby="summary-title">
           <div className="section-heading">
             <h2 id="summary-title">Resumo do mês</h2>
-            <DatePicker label="Mês de referência" value={month} onChange={setMonth} monthOnly />
+            <DatePicker label="Mês de referência" value={month} onChange={(next) => {
+              setMonth(next);
+              setSaveNotice('');
+            }} monthOnly />
           </div>
           <dl className="metrics">
             <div className="balance"><dt>Saldo do mês</dt><dd>{entries ? money(income - expenses) : '—'}</dd></div>
@@ -153,7 +162,7 @@ export function App() {
               )}
         </section>}
       </main>
-      {editing !== undefined && <TransactionForm entry={editing} onSave={save} onClose={() => setEditing(undefined)} />}
+      {editing !== undefined && <TransactionForm entry={editing} month={month} onSave={save} onClose={() => setEditing(undefined)} />}
       {deleting && (
         <Modal title="Excluir lançamento?" busy={deletingBusy} onClose={() => setDeleting(undefined)}>
           <p className="delete-copy">O lançamento <strong>{deleting.description}</strong> será removido do histórico.</p>

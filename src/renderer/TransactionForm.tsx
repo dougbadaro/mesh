@@ -36,8 +36,9 @@ export function Modal({ children, title, busy, onClose }: {
   );
 }
 
-export function TransactionForm({ entry, onSave, onClose }: {
+export function TransactionForm({ entry, month, onSave, onClose }: {
   entry: Transaction | null;
+  month: string;
   onSave(input: TransactionDraft, id?: number): Promise<void>;
   onClose(): void;
 }) {
@@ -45,7 +46,10 @@ export function TransactionForm({ entry, onSave, onClose }: {
   const [busy, setBusy] = useState(false);
   const [type, setType] = useState<TransactionInput['type']>(entry?.type ?? 'expense');
   const [category, setCategory] = useState<TransactionInput['category'] | ''>(entry?.category ?? '');
-  const [date, setDate] = useState(entry?.date ?? today());
+  const [date, setDate] = useState(() => {
+    const currentDate = today();
+    return entry?.date ?? (currentDate.startsWith(month) ? currentDate : month + '-01');
+  });
   const [parcelled, setParcelled] = useState(false);
   const canParcel = !entry && type === 'expense';
   const isParcelled = canParcel && parcelled;

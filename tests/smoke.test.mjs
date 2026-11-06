@@ -42,6 +42,9 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       await period.click();
       await page.getByRole('button', { name: 'Ano anterior' }).click();
       await page.getByRole('button', { name: 'jan', exact: true }).click();
+      await page.getByRole('button', { name: 'Novo lançamento' }).click();
+      assert.match(await page.getByRole('button', { name: 'Data', exact: true }).innerText(), /^01\/01\/\d{4}$/);
+      await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
       await period.click();
       await page.getByRole('button', { name: 'Mês atual' }).click();
       await page.getByRole('button', { name: 'Lançamentos', exact: true }).click();
@@ -58,6 +61,19 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       await page.getByRole('row', { name: /Mercado do bairro.*1\.124,90/ }).waitFor({ timeout: 5000 });
       const summary = page.getByRole('region', { name: 'Resumo do mês' });
       await summary.getByText(/^[-−]R\$\s*1\.124,90$/).waitFor();
+      await page.getByRole('button', { name: 'Novo lançamento' }).click();
+      await page.getByLabel('Descrição').fill('Estacionamento');
+      await page.getByLabel('Valor (R$)').fill('10,00');
+      await page.getByRole('button', { name: 'Categoria', exact: true }).click();
+      await page.getByRole('button', { name: 'Transporte', exact: true }).click();
+      await page.getByRole('button', { name: 'Data', exact: true }).click();
+      await page.getByRole('button', { name: 'Mês anterior', exact: true }).click();
+      await page.getByRole('button', { name: /Selecionar dia 1 de / }).click();
+      await page.getByRole('button', { name: 'Salvar lançamento' }).click();
+      await page.getByRole('dialog').waitFor({ state: 'hidden' });
+      await page.getByRole('row', { name: /Mercado do bairro.*1\.124,90/ }).waitFor({ timeout: 5000 });
+      await page.getByRole('status').filter({ hasText: /Salvo em 01\// }).waitFor();
+      assert.equal(await page.evaluate(async () => (await globalThis.meshTransactions.list()).length), 2);
       await page.getByRole('button', { name: 'Tipo de lançamento', exact: true }).click();
       await page.getByRole('button', { name: 'Receitas', exact: true }).click();
       await page.getByText('Nenhum resultado').waitFor();
@@ -96,7 +112,7 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       await page.getByRole('button', { name: 'Financiamento de veículo', exact: true }).click({ timeout: 5000 });
       await page.getByRole('button', { name: 'Salvar lançamento' }).click();
       await page.getByRole('row', { name: /Moto \(10\/24\).*Financiamento de veículo.*727,16/ }).waitFor();
-      assert.equal(await page.evaluate(async () => (await globalThis.meshTransactions.list()).length), 15);
+      assert.equal(await page.evaluate(async () => (await globalThis.meshTransactions.list()).length), 16);
     } finally {
       await reopened.close();
     }
