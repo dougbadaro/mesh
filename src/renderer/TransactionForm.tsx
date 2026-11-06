@@ -37,9 +37,10 @@ export function Modal({ children, title, busy, onClose }: {
   );
 }
 
-export function TransactionForm({ entry, month, onSave, onClose }: {
+export function TransactionForm({ entry, month, defaultPayment, onSave, onClose }: {
   entry: Transaction | null;
   month: string;
+  defaultPayment: PaymentMethod | '';
   onSave(input: TransactionDraft, id?: number): Promise<void>;
   onClose(): void;
 }) {
@@ -47,7 +48,7 @@ export function TransactionForm({ entry, month, onSave, onClose }: {
   const [busy, setBusy] = useState(false);
   const [type, setType] = useState<TransactionInput['type']>(entry?.type ?? 'expense');
   const [category, setCategory] = useState<TransactionInput['category'] | ''>(entry?.category ?? '');
-  const [payment, setPayment] = useState<PaymentMethod | ''>(entry?.paymentMethod ?? '');
+  const [payment, setPayment] = useState<PaymentMethod | ''>(entry ? entry.paymentMethod ?? '' : defaultPayment);
   const [date, setDate] = useState(() => {
     const currentDate = today();
     return entry?.date ?? (currentDate.startsWith(month) ? currentDate : month + '-01');

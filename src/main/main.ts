@@ -22,6 +22,7 @@ function openWindow() {
     height: 720,
     minWidth: 420,
     minHeight: 420,
+    show: false,
     backgroundColor: '#0d0c10',
     webPreferences: {
       nodeIntegration: false,
@@ -31,6 +32,10 @@ function openWindow() {
     },
   });
 
+  window.once('ready-to-show', () => {
+    window.maximize();
+    window.show();
+  });
   window.webContents.on('will-navigate', (event) => event.preventDefault());
   window.webContents.on('will-redirect', (event) => event.preventDefault());
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

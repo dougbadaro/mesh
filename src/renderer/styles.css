@@ -140,6 +140,7 @@ dialog::backdrop { background: #000b; }
 .dashboard-grid { display: grid; grid-template-columns: 1fr 1.15fr; align-items: start; gap: 18px; }
 .dashboard-panel { min-width: 0; padding: 20px 24px; border-radius: 12px; background: var(--surface); }
 .dashboard-recent { grid-column: 1 / -1; }
+.credit-spending { margin-block-end: 18px; }
 .dashboard-panel > h2, .dashboard-panel > .section-heading { min-height: 36px; align-content: center; }
 .dashboard-empty { color: var(--muted); font-size: 14px; padding-block: 14px; }
 .spending, .recent { margin: 0; padding: 0; list-style: none; }
@@ -177,4 +178,9 @@ dialog::backdrop { background: #000b; }
   tbody td:last-child { grid-column: 1 / -1; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .dashboard-panel { padding-inline: 16px; }
+}
+
+@media (max-width: 480px) {
+  .topbar-inner { flex-wrap: wrap; gap: 4px; padding-block: 10px; }
+  .topbar nav { width: 100%; padding-inline-start: 0; border: 0; }
 }
