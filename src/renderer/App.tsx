@@ -77,10 +77,17 @@ export function App() {
   async function save(input: TransactionDraft, id?: number) {
     if (!api) return;
     const saved = await api.save(input, id);
-    setEntries((current) => [...saved, ...(current ?? []).filter((entry) => entry.id !== id)]
+    const savedIds = new Set(saved.map((entry) => entry.id));
+    setEntries((current) => [...saved, ...(current ?? []).filter((entry) => !savedIds.has(entry.id))]
       .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id));
-    setSaveNotice(input.date.startsWith(month) ? '' :
-      `Salvo em ${dateFormat.format(new Date(input.date))}. O mês em exibição foi mantido.`);
+    const dateNotice = input.date.startsWith(month) ? '' :
+      `Salvo em ${dateFormat.format(new Date(input.date))}. O mês em exibição foi mantido.`;
+    const futureCount = saved.length - 1;
+    const paymentNotice = input.applyPaymentToFuture
+      ? futureCount === 0 ? 'Nenhuma parcela futura sem forma de pagamento foi encontrada.'
+        : `Forma de pagamento atualizada em ${futureCount} ${futureCount === 1 ? 'parcela futura' : 'parcelas futuras'}.`
+      : '';
+    setSaveNotice([dateNotice, paymentNotice].filter(Boolean).join(' '));
     setKind('all');
     setQuery('');
     setEditing(undefined);

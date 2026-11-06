@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { categories, maxInstallments, validInstallments, type PaymentMethod, type Transaction, type TransactionDraft, type TransactionInput } from '../main/transactions';
+import { categories, installmentReference, maxInstallments, validInstallments, type PaymentMethod, type Transaction, type TransactionDraft, type TransactionInput } from '../main/transactions';
 import { Choice, DatePicker } from './controls';
 import { parseReais } from './format';
 import { paymentOptions } from './payment';
@@ -49,6 +49,9 @@ export function TransactionForm({ entry, month, defaultPayment, onSave, onClose 
   const [type, setType] = useState<TransactionInput['type']>(entry?.type ?? 'expense');
   const [category, setCategory] = useState<TransactionInput['category'] | ''>(entry?.category ?? '');
   const [payment, setPayment] = useState<PaymentMethod | ''>(entry ? entry.paymentMethod ?? '' : defaultPayment);
+  const [applyPayment, setApplyPayment] = useState(false);
+  const reference = entry?.type === 'expense' ? installmentReference(entry.description) : null;
+  const canApplyPayment = Boolean(payment && type === 'expense' && reference && reference.current < reference.total);
   const [date, setDate] = useState(() => {
     const currentDate = today();
     return entry?.date ?? (currentDate.startsWith(month) ? currentDate : month + '-01');
@@ -81,6 +84,7 @@ export function TransactionForm({ entry, month, defaultPayment, onSave, onClose 
       await onSave({
         description, date, cents,
         type, category, installments, paymentMethod: payment || null,
+        applyPaymentToFuture: canApplyPayment && applyPayment,
       }, entry?.id);
     } catch {
       setError('Não foi possível salvar. Tente novamente.');
@@ -113,6 +117,12 @@ export function TransactionForm({ entry, month, defaultPayment, onSave, onClose 
             <Choice label="Forma de pagamento" value={payment} options={paymentOptions}
               onChange={(value) => setPayment(value as PaymentMethod | '')} />
           </div>
+          {canApplyPayment && (
+            <label className="full installment-toggle">
+              <input type="checkbox" checked={applyPayment} onChange={(event) => setApplyPayment(event.target.checked)} />
+              Aplicar às próximas parcelas sem forma de pagamento
+            </label>
+          )}
           {canParcel && (
             <label className="full installment-toggle">
               <input type="checkbox" checked={parcelled} onChange={(event) => setParcelled(event.target.checked)} />

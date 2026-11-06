@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { validateTransaction, validInstallments, type Transaction, type TransactionDraft, type TransactionInput } from './transactions.js';
+import { installmentReference, validateTransaction, validInstallments, type Transaction, type TransactionDraft, type TransactionInput } from './transactions.js';
 
 function installmentDate(date: string, offset: number) {
   const month = new Date(date.slice(0, 7) + '-01T00:00:00Z');
@@ -39,6 +39,13 @@ export function openTransactionStore(filename: string) {
   const list = db.prepare('SELECT * FROM transactions ORDER BY date DESC, id DESC');
   const insert = db.prepare('INSERT INTO transactions (description, type, category, date, cents, paymentMethod) VALUES (?, ?, ?, ?, ?, ?) RETURNING *');
   const update = db.prepare('UPDATE transactions SET description = ?, type = ?, category = ?, date = ?, cents = ?, paymentMethod = ? WHERE id = ? RETURNING *');
+  const get = db.prepare('SELECT * FROM transactions WHERE id = ?');
+  const updateFuturePayment = db.prepare(`
+    UPDATE transactions SET paymentMethod = ?
+    WHERE id = ? AND description = ? AND type = 'expense' AND paymentMethod IS NULL
+      AND substr(date, 1, 7) = ?
+    RETURNING *
+  `);
   const remove = db.prepare('DELETE FROM transactions WHERE id = ?');
 
   function validId(id: number) {
@@ -50,6 +57,24 @@ export function openTransactionStore(filename: string) {
     return insert.get(description, type, category, date, cents, paymentMethod ?? null) as Transaction;
   }
 
+  function editTransaction({ description, type, category, date, cents, paymentMethod }: TransactionInput, id: number) {
+    const row = update.get(description, type, category, date, cents, paymentMethod ?? null, id);
+    if (!row) throw new Error('Lançamento não encontrado.');
+    return row as Transaction;
+  }
+
+  function atomic<T>(operation: () => T): T {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = operation();
+      db.exec('COMMIT');
+      return result;
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
   return {
     list: () => list.all() as Transaction[],
     save(input: TransactionDraft, id?: number): Transaction[] {
@@ -57,10 +82,27 @@ export function openTransactionStore(filename: string) {
       const plan = input.installments;
       if (plan === undefined) {
         if (id === undefined) return [insertTransaction(entry)];
-        const { description, type, category, date, cents, paymentMethod } = entry;
-        const row = update.get(description, type, category, date, cents, paymentMethod ?? null, validId(id));
-        if (!row) throw new Error('Lançamento não encontrado.');
-        return [row as Transaction];
+        validId(id);
+        const { paymentMethod } = entry;
+        if (input.applyPaymentToFuture !== true || !paymentMethod || entry.type !== 'expense') {
+          return [editTransaction(entry, id)];
+        }
+
+        return atomic(() => {
+          const original = get.get(id) as Transaction | undefined;
+          const updated = [editTransaction(entry, id)];
+          const reference = original?.type === 'expense' ? installmentReference(original.description) : null;
+          if (!reference || !original) return updated;
+
+          // Legacy installments were inserted together with consecutive IDs.
+          for (let offset = 1; offset <= reference.total - reference.current; offset++) {
+            const date = installmentDate(original.date, offset);
+            const description = `${reference.name} (${reference.current + offset}/${reference.total})`;
+            const row = updateFuturePayment.get(paymentMethod, id + offset, description, date.slice(0, 7));
+            if (row) updated.push(row as Transaction);
+          }
+          return updated;
+        });
       }
 
       if (!plan || id !== undefined || entry.type !== 'expense' || !validInstallments(plan)) {
@@ -71,15 +113,7 @@ export function openTransactionStore(filename: string) {
         description: `${entry.description} (${plan.current + offset}/${plan.total})`,
         date: installmentDate(entry.date, offset),
       }));
-      db.exec('BEGIN');
-      try {
-        const saved = rows.map(insertTransaction);
-        db.exec('COMMIT');
-        return saved;
-      } catch (error) {
-        db.exec('ROLLBACK');
-        throw error;
-      }
+      return atomic(() => rows.map(insertTransaction));
     },
     remove(id: number) {
       if (!remove.run(validId(id)).changes) throw new Error('Lançamento não encontrado.');

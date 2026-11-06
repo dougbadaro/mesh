@@ -56,6 +56,13 @@ test('gera só as parcelas restantes e preserva o dia de vencimento quando poss�
       ['Moto (24/24)', '2027-03-31', 72716],
     ]);
     assert.equal(store.list().length, 3);
+    const [first, second, third] = saved;
+    store.save({ ...second, paymentMethod: 'pix' }, second.id);
+    const [other] = store.save({ ...draft, description: 'Moto (24/24)', date: third.date });
+    const updated = store.save({ ...first, paymentMethod: 'credit', applyPaymentToFuture: true }, first.id);
+    assert.deepEqual(updated.map(({ id, paymentMethod }) => [id, paymentMethod]), [[first.id, 'credit'], [third.id, 'credit']]);
+    assert.equal(store.list().find((entry) => entry.id === second.id).paymentMethod, 'pix');
+    assert.equal(store.list().find((entry) => entry.id === other.id).paymentMethod, null);
   } finally {
     store.close();
   }
@@ -69,6 +76,7 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       const page = await desktop.firstWindow();
       await page.getByText('Mesh', { exact: true }).waitFor({ timeout: 5000 });
       assert.equal(await page.title(), 'Mesh');
+      assert.equal(await page.evaluate(() => globalThis.navigator.windowControlsOverlay?.visible), true);
       assert.equal(new URL(page.url()).protocol, 'financas:');
       assert.equal(await page.evaluate(() => typeof globalThis.require), 'undefined');
       await page.getByRole('heading', { name: 'Dashboard', exact: true }).waitFor({ timeout: 5000 });
@@ -175,13 +183,18 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       await page.getByRole('spinbutton', { name: 'Parcela atual', exact: true }).fill('10');
       await page.getByRole('button', { name: 'Categoria', exact: true }).click();
       await page.getByRole('button', { name: 'Financiamento de veículo', exact: true }).click({ timeout: 5000 });
-      await page.getByRole('button', { name: 'Forma de pagamento', exact: true }).click();
-      await page.getByRole('button', { name: 'Boleto', exact: true }).click();
       await page.getByRole('button', { name: 'Salvar lançamento' }).click();
-      await page.getByRole('row', { name: /Moto \(10\/24\).*Financiamento de veículo.*727,16/ }).waitFor();
+      const installment = page.getByRole('row', { name: /Moto \(10\/24\).*Financiamento de veículo.*727,16/ });
+      await installment.getByRole('button', { name: /Editar/ }).click();
+      await page.getByRole('button', { name: 'Forma de pagamento', exact: true }).click();
+      await page.getByRole('group', { name: 'Forma de pagamento', exact: true })
+        .getByRole('button', { name: 'Cartão de crédito', exact: true }).click();
+      await page.getByLabel('Aplicar às próximas parcelas sem forma de pagamento').check();
+      await page.getByRole('button', { name: 'Salvar lançamento' }).click();
+      await page.getByRole('status').filter({ hasText: '14 parcelas futuras' }).waitFor();
       const entries = await page.evaluate(() => globalThis.meshTransactions.list());
       assert.equal(entries.length, 18);
-      assert.equal(entries.filter((entry) => entry.paymentMethod === 'boleto').length, 15);
+      assert.equal(entries.filter((entry) => entry.description.startsWith('Moto ') && entry.paymentMethod === 'credit').length, 15);
     } finally {
       await reopened.close();
     }

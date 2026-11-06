@@ -24,6 +24,10 @@ function openWindow() {
     minHeight: 420,
     show: false,
     backgroundColor: '#0d0c10',
+    ...(process.platform !== 'darwin' && {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: { color: '#0d0c10', symbolColor: '#e4d9f0', height: 60 },
+    }),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

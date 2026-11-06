@@ -27,12 +27,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focu
   outline-offset: 3px;
 }
 
-.topbar { border-bottom: 1px solid var(--rule); }
+.topbar {
+  border-bottom: 1px solid var(--rule);
+  padding-inline-start: env(titlebar-area-x, 0px);
+  padding-inline-end: max(0px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)));
+  app-region: drag;
+}
 .topbar-inner, main { width: min(1120px, calc(100% - 64px)); margin-inline: auto; }
 .topbar-inner { display: flex; align-items: center; gap: 32px; min-height: 62px; }
 .brand { display: inline-flex; align-items: center; gap: 9px; font-size: 21px; font-weight: 700; }
 .topbar nav, .local { font-size: 14px; }
-.topbar nav { display: flex; align-items: center; gap: 6px; padding-inline-start: 22px; border-inline-start: 1px solid var(--rule); }
+.topbar nav { display: flex; align-items: center; gap: 6px; padding-inline-start: 22px; border-inline-start: 1px solid var(--rule); app-region: no-drag; }
 .topbar nav button { color: var(--muted); background: transparent; font-size: 14px; min-height: 38px; }
 .topbar nav button:hover, .topbar nav button[aria-current] { color: var(--ink); background: var(--raised); }
 .local { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; color: var(--muted); }
@@ -183,4 +188,5 @@ dialog::backdrop { background: #000b; }
 @media (max-width: 480px) {
   .topbar-inner { flex-wrap: wrap; gap: 4px; padding-block: 10px; }
   .topbar nav { width: 100%; padding-inline-start: 0; border: 0; }
+  .topbar nav button { font-size: 12px; padding-inline: 4px; }
 }
