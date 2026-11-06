@@ -61,8 +61,11 @@ export function TransactionForm({ entry, month, defaultPayment, onSave, onClose 
   const isCredit = type === 'expense' && payment === 'credit';
   const selectedInvoice = invoiceMonth ?? entry?.billingMonth ?? date.slice(0, 7);
   const [parcelled, setParcelled] = useState(false);
+  const [currentInstallment, setCurrentInstallment] = useState('1');
   const canParcel = !entry && type === 'expense';
   const isParcelled = canParcel && parcelled;
+  const ongoingPlan = isParcelled && Number(currentInstallment) > 1;
+  const dateLabel = ongoingPlan || reference ? 'Data da parcela atual' : isParcelled ? 'Data da compra' : 'Data';
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -115,8 +118,8 @@ export function TransactionForm({ entry, month, defaultPayment, onSave, onClose 
             <Choice label="Categoria" value={category} options={categoryOptions}
               onChange={(value) => setCategory(value as TransactionInput['category'])} />
           </div>
-          <div className="field"><span>{isParcelled ? 'Data da parcela atual' : 'Data'}</span>
-            <DatePicker label={isParcelled ? 'Data da parcela atual' : 'Data'} value={date} onChange={setDate} />
+          <div className="field"><span>{dateLabel}</span>
+            <DatePicker label={dateLabel} value={date} onChange={setDate} />
           </div>
           <div className="field full"><span>Forma de pagamento</span>
             <Choice label="Forma de pagamento" value={payment} options={paymentOptions}
@@ -133,7 +136,9 @@ export function TransactionForm({ entry, month, defaultPayment, onSave, onClose 
                   <DatePicker label="Mês da fatura" value={selectedInvoice} onChange={setInvoiceMonth} monthOnly />
                 </div>
               )}
-              {!manualInvoice && <p className="full installment-help">O Mesh usa o ciclo configurado. Em compras no dia do fechamento, confira a fatura do banco.</p>}
+              {!manualInvoice && <p className="full installment-help">{ongoingPlan || reference
+                ? 'Para parcelas já em andamento, informe a data da parcela na fatura.'
+                : 'O Mesh usa o ciclo configurado. Em compras no dia do fechamento, confira a fatura do banco.'}</p>}
             </>
           )}
           {canApplyPayment && (
@@ -154,7 +159,8 @@ export function TransactionForm({ entry, month, defaultPayment, onSave, onClose 
                 <input name="total" type="number" min={2} max={maxInstallments} step={1} required placeholder="Ex.: 24" />
               </label>
               <label>Parcela atual
-                <input name="current" type="number" min={1} max={maxInstallments} step={1} required defaultValue={1} />
+                <input name="current" type="number" min={1} max={maxInstallments} step={1} required
+                  value={currentInstallment} onChange={(event) => setCurrentInstallment(event.target.value)} />
               </label>
               <p className="full installment-help">O Mesh registra a parcela atual e as seguintes, uma por mês.</p>
             </>

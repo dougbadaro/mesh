@@ -33,6 +33,19 @@ test('grava a fatura das compras no crédito e encadeia as parcelas sem mudar a 
     ]);
     assert.equal(store.save({ ...draft, billingMonth: '2026-11' }, saved[0].id)[0].billingMonth, '2026-11');
     assert.equal(store.save({ ...draft, paymentMethod: 'pix' })[0].billingMonth, null);
+    store.saveCardCycle({ closingDay: 4, dueDay: 16 });
+    const existingPlan = store.save({
+      ...draft, description: 'Chuteira', date: '2026-10-07',
+      installments: { current: 3, total: 4 },
+    });
+    assert.deepEqual(existingPlan.map(({ billingMonth }) => billingMonth), ['2026-10', '2026-11']);
+    const unclassified = store.save({
+      ...draft, description: 'Compra antiga', date: '2026-10-07', paymentMethod: null,
+      installments: { current: 3, total: 4 },
+    });
+    assert.deepEqual(store.save({
+      ...unclassified[0], paymentMethod: 'credit', applyPaymentToFuture: true,
+    }, unclassified[0].id).map(({ billingMonth }) => billingMonth), ['2026-10', '2026-11']);
   } finally {
     store.close();
   }

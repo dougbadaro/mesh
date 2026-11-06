@@ -80,12 +80,13 @@ export function openTransactionStore(filename: string) {
     return row as Transaction;
   }
 
-  function assignBillingMonth(entry: TransactionInput, original?: Transaction) {
+  function assignBillingMonth(entry: TransactionInput, original?: Transaction, scheduled = false) {
     if (entry.type !== 'expense' || entry.paymentMethod !== 'credit') return null;
     if (entry.billingMonth) return entry.billingMonth;
     if (original?.paymentMethod === 'credit' && original.type === 'expense' && original.date === entry.date) {
       return original.billingMonth;
     }
+    if (scheduled || (original && installmentReference(original.description))) return entry.date.slice(0, 7);
     const settings = getCardCycle.get() as CardCycleSettings | undefined;
     if (!settings) return null;
     const due = cardCycleForDate(entry.date, settings).due;
@@ -142,7 +143,7 @@ export function openTransactionStore(filename: string) {
       if (!plan || id !== undefined || entry.type !== 'expense' || !validInstallments(plan)) {
         throw new Error('Parcelamento inválido.');
       }
-      const billingMonth = assignBillingMonth(entry);
+      const billingMonth = assignBillingMonth(entry, undefined, plan.current > 1);
       const rows = Array.from({ length: plan.total - plan.current + 1 }, (_, offset) => validateTransaction({
         ...entry,
         description: `${entry.description} (${plan.current + offset}/${plan.total})`,
