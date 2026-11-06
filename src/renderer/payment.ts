@@ -1,4 +1,4 @@
-import { paymentMethods, type PaymentMethod } from '../main/transactions';
+import { paymentMethods, type PaymentMethod, type Transaction } from '../main/transactions';
 
 export const unknownPayment = 'Não informado';
 export const paymentOptions = [
@@ -8,4 +8,11 @@ export const paymentOptions = [
 
 export function paymentLabel(method: PaymentMethod | null) {
   return method ? paymentMethods[method] : unknownPayment;
+}
+
+export function paymentMonth(entry: Transaction) {
+  const purchaseMonth = entry.date.slice(0, 7);
+  return entry.type === 'expense' && entry.paymentMethod === 'credit'
+    ? entry.billingMonth ?? purchaseMonth
+    : purchaseMonth;
 }

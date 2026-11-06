@@ -214,6 +214,16 @@ test('registra, edita e exclui lançamentos locais sem perder os dados ao reabri
       if (invoice.getUTCMonth() === 0) await page.getByRole('button', { name: 'Próximo ano', exact: true }).click();
       await page.getByRole('button', { name: invoiceMonth, exact: true }).click();
       await page.getByRole('row', { name: /Compra após o fechamento/ }).waitFor();
+      await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+      const statement = page.getByRole('region', { name: 'Extrato do mês' });
+      await statement.getByText('Compra após o fechamento', { exact: true }).waitFor({ timeout: 5000 });
+      await statement.getByText(/Compra em 11\//).waitFor();
+      const dashboardSummary = page.getByRole('region', { name: 'Resumo do mês' });
+      await dashboardSummary.getByText(/^R\$\s*67,00$/).waitFor();
+      await page.getByRole('button', { name: 'Mês de referência', exact: true }).click();
+      await page.getByRole('button', { name: 'Mês atual', exact: true }).click();
+      assert.equal(await statement.getByText('Compra após o fechamento', { exact: true }).count(), 0);
+      await page.getByRole('navigation', { name: 'Principal' }).getByRole('button', { name: 'Cartão de crédito', exact: true }).click();
       await invoicePicker.click();
       await page.getByRole('button', { name: 'Mês atual', exact: true }).click();
       assert.equal(await reopened.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMaximized()), true);

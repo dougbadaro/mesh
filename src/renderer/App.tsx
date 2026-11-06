@@ -6,7 +6,7 @@ import { CreditSpending, Dashboard } from './Dashboard';
 import { CardCycle } from './CardCycle';
 import { dateFormat, money, monthFormat } from './format';
 import logo from './mesh.svg?no-inline';
-import { paymentLabel, paymentOptions } from './payment';
+import { paymentLabel, paymentMonth, paymentOptions } from './payment';
 
 declare global {
   interface Window {
@@ -18,7 +18,7 @@ const api = window.meshTransactions;
 const types = [{ value: 'all', label: 'Todos os tipos' }, { value: 'income', label: 'Receitas' }, { value: 'expense', label: 'Despesas' }];
 const paymentFilters = [{ value: 'all', label: 'Todas as formas' }, ...paymentOptions];
 const screens = {
-  dashboard: { title: 'Dashboard', subtitle: 'Veja quanto entrou, quanto saiu e onde você gastou.' },
+  dashboard: { title: 'Dashboard', subtitle: 'Veja o que entrou e o que você tem para pagar no mês.' },
   transactions: { title: 'Lançamentos', subtitle: 'Consulte e organize suas receitas e despesas.' },
   credit: { title: 'Cartão de crédito', subtitle: 'Acompanhe as despesas no crédito por mês da fatura.' },
 } as const;
@@ -48,12 +48,13 @@ export function App() {
     return () => { active = false; };
   }, [attempt]);
 
-  const monthEntries = (entries ?? []).filter((entry) => entry.date.slice(0, 7) === month);
+  const monthEntries = (entries ?? []).filter((entry) =>
+    (screen === 'dashboard' ? paymentMonth(entry) : entry.date.slice(0, 7)) === month);
   const income = monthEntries.reduce((sum, entry) => sum + (entry.type === 'income' ? entry.cents : 0), 0);
   const expenses = monthEntries.reduce((sum, entry) => sum + (entry.type === 'expense' ? entry.cents : 0), 0);
   const isCredit = screen === 'credit';
   const creditEntries = isCredit ? (entries ?? []).filter((entry) => entry.type === 'expense' && entry.paymentMethod === 'credit') : [];
-  const screenEntries = isCredit ? creditEntries.filter((entry) => (entry.billingMonth ?? entry.date.slice(0, 7)) === month) : monthEntries;
+  const screenEntries = isCredit ? creditEntries.filter((entry) => paymentMonth(entry) === month) : monthEntries;
   const creditTotal = isCredit ? screenEntries.reduce((sum, entry) => sum + entry.cents, 0) : 0;
   const metrics = isCredit ? [
     { label: 'Total no crédito', value: money(creditTotal) },
@@ -158,12 +159,7 @@ export function App() {
         {isCredit && api && <CardCycle api={api} />}
         {isCredit && entries && <CreditSpending entries={screenEntries} allCreditEntries={creditEntries} month={month} />}
         {screen === 'dashboard' && entries ? (
-          <Dashboard entries={monthEntries} onHistory={() => {
-            setKind('all');
-            setQuery('');
-            setPaymentFilter('all');
-            setScreen('transactions');
-          }} />
+          <Dashboard entries={monthEntries} />
         ) : <section className="ledger" aria-labelledby="ledger-title">
           <div className="section-heading ledger-heading">
             <div>

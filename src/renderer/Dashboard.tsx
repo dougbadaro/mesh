@@ -1,6 +1,6 @@
-import type { Transaction } from '../main/transactions';
+import { installmentReference, type Transaction } from '../main/transactions';
 import { dateFormat, money, monthFormat } from './format';
-import { paymentLabel } from './payment';
+import { paymentLabel, paymentMonth } from './payment';
 
 function SpendingPanel({ id, title, spending }: { id: string; title: string; spending: Map<string, number> }) {
   const groups = [...spending].sort((a, b) => b[1] - a[1]);
@@ -37,7 +37,7 @@ export function CreditSpending({ entries, allCreditEntries, month }: {
   allCreditEntries: Transaction[];
   month: string;
 }) {
-  const totalsByMonth = spendingBy(allCreditEntries, (entry) => entry.billingMonth ?? entry.date.slice(0, 7));
+  const totalsByMonth = spendingBy(allCreditEntries, paymentMonth);
   const nextMonth = new Date(month + '-01T00:00:00Z');
   const upcoming = [];
   for (let offset = 0; offset < 3; offset++) {
@@ -66,21 +66,24 @@ export function CreditSpending({ entries, allCreditEntries, month }: {
   );
 }
 
-export function Dashboard({ entries, onHistory }: { entries: Transaction[]; onHistory(): void }) {
+export function Dashboard({ entries }: { entries: Transaction[] }) {
   return (
     <div className="dashboard-grid">
       <SpendingPanel id="spending-heading" title="Despesas por categoria" spending={spendingBy(entries, (entry) => entry.category)} />
       <SpendingPanel id="payment-heading" title="Despesas por forma de pagamento" spending={spendingBy(entries, (entry) => paymentLabel(entry.paymentMethod))} />
-      <section className="dashboard-panel dashboard-recent" aria-labelledby="recent-heading">
-        <div className="section-heading">
-          <h2 id="recent-heading">Lançamentos recentes</h2>
-          <button type="button" className="quiet" onClick={onHistory}>Ver todos</button>
-        </div>
+      <section className="dashboard-panel dashboard-statement" aria-labelledby="statement-heading">
+        <h2 id="statement-heading">Extrato do mês</h2>
+        <p className="dashboard-empty">Compras no crédito aparecem no mês da fatura. As demais movimentações entram pela data do lançamento.</p>
         {entries.length ? (
-          <ul className="recent">
-            {entries.slice(0, 5).map((entry) => (
+          <ul className="statement">
+            {entries.map((entry) => (
               <li key={entry.id}>
-                <div><strong>{entry.description}</strong><span>{dateFormat.format(new Date(entry.date))}</span></div>
+                <div>
+                  <strong>{entry.description}</strong>
+                  <span>{entry.category} · {paymentLabel(entry.paymentMethod)} · {entry.type === 'expense' && entry.paymentMethod === 'credit'
+                    ? installmentReference(entry.description) ? 'Data da parcela ' : 'Compra em '
+                    : ''}{dateFormat.format(new Date(entry.date))}</span>
+                </div>
                 <strong>{entry.type === 'income' ? '+' : '−'}{money(entry.cents)}</strong>
               </li>
             ))}
